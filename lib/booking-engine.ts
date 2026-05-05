@@ -50,20 +50,10 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     return;
   }
 
-  const roomsToTry: { name: RoomName; spaceId: number }[] = ROOM_PRIORITY
-    .map((name) => ({ name, spaceId: ROOM_SPACE_IDS[name] }))
-    .filter((r): r is { name: RoomName; spaceId: number } => r.spaceId !== null);
-
-  if (roomsToTry.length === 0) {
-    console.error("[engine] no Skedda spaceId configured for any room");
-    await markBookingResult({
-      iCalUID: args.iCalUID,
-      status: "failed",
-      failureReason: "no_room_id_configured",
-    });
-    await notifyFailure(user, args, "Aucun ID de salle Skedda configuré côté admin.");
-    return;
-  }
+  const roomsToTry = ROOM_PRIORITY.map((name) => ({
+    name,
+    spaceId: ROOM_SPACE_IDS[name],
+  }));
 
   let lastResult: BookSkeddaResult | null = null;
   let lastRoom: RoomName | null = null;

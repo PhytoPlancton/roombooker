@@ -3,16 +3,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RoomName } from "./bookings";
 
-/**
- * Mapping rooms → Skedda spaceId. À compléter au fur et à mesure qu'on découvre les IDs.
- * Si un ID est null, on skip la salle pour l'instant.
- */
-export const ROOM_SPACE_IDS: Record<RoomName, number | null> = {
-  Venus: 1117995, // À confirmer (ID vu dans une URL du user)
-  Mars: null,
-  Mercury: null,
-  Earth: null,
-  Jupiter: null,
+export const ROOM_SPACE_IDS: Record<RoomName, number> = {
+  Venus: 1117978,
+  Mars: 1117995,
+  Mercury: 1119104,
+  Earth: 1117994,
+  Jupiter: 1117977,
 };
 
 export interface BookSkeddaArgs {
