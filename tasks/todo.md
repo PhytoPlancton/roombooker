@@ -61,9 +61,9 @@ MONGODB_DB=roombooker
 ENCRYPTION_KEY=<32 bytes hex, à générer>
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=https://rooms.nmt.ovh/api/auth/google/callback
+GOOGLE_REDIRECT_URI=https://roombooker.nmt.ovh/api/auth/google/callback
 GOOGLE_WEBHOOK_TOKEN=<secret aléatoire pour valider les push>
-PUBLIC_APP_URL=https://rooms.nmt.ovh
+PUBLIC_APP_URL=https://roombooker.nmt.ovh
 EDJ_SMS_API_TOKEN=d9f364ecd9184bcca1ad1b4139d4a6f7
 BREVO_API_KEY=xkeysib-...
 BREVO_SENDER_EMAIL=<email vérifié dans dashboard Brevo>
@@ -216,7 +216,7 @@ SLACK_SIGNING_SECRET=
 - [ ] Image rendue publique sur GHCR
 - [ ] Stack EDJ Labs avec les 10 Deploy Labels Traefik
 - [ ] `git tag v0.1.0 && git push --tags`
-- [ ] Vérifier `https://rooms.nmt.ovh` répond
+- [ ] Vérifier `https://roombooker.nmt.ovh` répond
 - [ ] Test end-to-end avec 1 sales pilote
 
 ---

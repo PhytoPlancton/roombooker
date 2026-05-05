@@ -3,7 +3,7 @@ const nextConfig = {
   output: "standalone",
   serverExternalPackages: ["playwright", "playwright-core", "mongodb"],
   experimental: {
-    serverActions: { allowedOrigins: ["rooms.nmt.ovh"] }
+    serverActions: { allowedOrigins: ["roombooker.nmt.ovh"] }
   }
 };
 
