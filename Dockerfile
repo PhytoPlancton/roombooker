@@ -29,6 +29,11 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# Playwright et googleapis sont marqués comme serverExternalPackages dans next.config.js,
+# donc Next.js standalone ne les bundle pas. On les copie explicitement.
+COPY --from=builder /app/node_modules/playwright ./node_modules/playwright
+COPY --from=builder /app/node_modules/playwright-core ./node_modules/playwright-core
+
 # Volume pour stocker les screenshots d'erreur Skedda
 VOLUME ["/app/debug-screenshots"]
 

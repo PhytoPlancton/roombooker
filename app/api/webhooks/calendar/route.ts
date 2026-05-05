@@ -5,6 +5,7 @@ import { findUserByWatchChannelId, updateWatchSyncToken, type UserDoc } from "@/
 import { shouldBookRoom } from "@/lib/booking-rules";
 import { createPendingBooking, findBookingByICalUID } from "@/lib/bookings";
 import { activateWatchForUser } from "@/lib/watch";
+import { processBookingForEvent } from "@/lib/booking-engine";
 
 export async function POST(req: NextRequest) {
   // 1. Verify Google's signature
@@ -111,6 +112,17 @@ async function processChange(user: UserDoc): Promise<void> {
       startsAt: booking.meeting.startsAt.toISOString(),
     });
 
-    // TODO Phase 3: hand off to Skedda booker
+    // Hand off to Skedda booker (fire-and-forget)
+    void processBookingForEvent({
+      iCalUID: event.iCalUID,
+      googleEventId: event.id!,
+      userId: new ObjectId(user._id),
+      meeting: booking.meeting,
+    }).catch((err) => {
+      console.error("[engine] processBookingForEvent failed", {
+        iCalUID: event.iCalUID,
+        err,
+      });
+    });
   }
 }

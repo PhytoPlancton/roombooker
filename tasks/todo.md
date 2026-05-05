@@ -1,7 +1,7 @@
 # RoomBooker — TODO
 
 **Démarré** : 2026-05-05
-**Phase actuelle** : 2 — Calendar Watch + Detection (Phase 0 ✅, Phase 1 ✅, Phase 2 code ✅)
+**Phase actuelle** : 3 — Skedda Booker (Phase 0 ✅, Phase 1 ✅, Phase 2 ✅, Phase 3 code ✅)
 
 ---
 
@@ -190,14 +190,21 @@ SLACK_SIGNING_SECRET=
 - [ ] Test runtime : créer meeting avec invité externe → voir booking pending en DB
 - [ ] Cron renouvellement watches < 48h (à faire après déploiement)
 
-### Phase 3 — Skedda Booker (Playwright)
-- [ ] Module `lib/skedda.ts` 
-- [ ] Flow : email gate → form principal → confirm
-- [ ] Tentative ordonnée : Venus → Mars → Mercury → Earth → Jupiter
-- [ ] Parser des erreurs Skedda + screenshots (volume Docker)
-- [ ] Window 10j → push en `pendingBookings`
-- [ ] Cron interne (setInterval 6h) pour traiter `pendingBookings`
-- [ ] Récupération du `skeddaCancelLink` (probablement via mail Skedda à intercepter — voir Phase 5)
+### Phase 3 — Skedda Booker (CODE ✅, RUNTIME TBD)
+- [x] Module `lib/skedda.ts` avec Playwright headless Chromium
+- [x] URL pré-construite avec `nbstart`/`nbend`/`nbspaces` (skip nav clic-clic)
+- [x] Flow : email gate → form principal (firstName/lastName/phone/org/title/terms) → confirm
+- [x] Parser des résultats : success + cancelLink, ou erreur classifiée (slot_unavailable / outside_hours / window_too_far / form_unexpected / navigation_failed / unknown)
+- [x] Screenshots + dump HTML sur erreur (`/app/debug-screenshots`)
+- [x] `lib/booking-engine.ts` orchestre : window 10j check, iteration sur rooms, mark booking result, notif user
+- [x] `lib/notify.ts` SMS via EDJ Labs API + Email via Brevo API (fallback gracieux si keys manquent)
+- [x] Hook dans webhook Calendar (fire-and-forget après création pending booking)
+- [x] Update Calendar event `location` avec le nom de la salle après succès
+- [x] Dockerfile copie playwright explicitement (output: standalone l'omet sinon)
+- [x] **Vérifié** : `npx next build` passe, `npx tsc --noEmit` passe
+- [ ] **À FAIRE** : récupérer les `spaceId` Skedda pour Mars/Mercury/Earth/Jupiter (Venus=1117995 supposé)
+- [ ] Test runtime end-to-end : meeting Calendar → booking pending → Skedda success → SMS reçu
+- [ ] Cron interne pour traiter pendingBookings (window > 10j) + renouvellement watches
 
 ### Phase 4 — Notifications
 - [ ] Module `lib/notify.ts` (interface unifiée : SMS + email + Slack)
