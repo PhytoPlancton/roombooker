@@ -117,16 +117,25 @@ async function step(args: BookSkeddaArgs, label: string, extra: Record<string, u
 }
 
 /** YYYY-MM-DDTHH:mm:ss without timezone — Skedda interprets in venue timezone (Europe/Berlin for Antler France). */
+/**
+ * Skedda interprets ISO strings without timezone as local-to-the-venue.
+ * For Antler France, /webs returns timeZoneId="Europe/Berlin", so we must
+ * format the wall-clock time in Berlin TZ (which matches Paris year-round).
+ */
 function formatLocalIso(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    d.getUTCFullYear() +
-    "-" + pad(d.getUTCMonth() + 1) +
-    "-" + pad(d.getUTCDate()) +
-    "T" + pad(d.getUTCHours()) +
-    ":" + pad(d.getUTCMinutes()) +
-    ":" + pad(d.getUTCSeconds())
-  );
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const m: Record<string, string> = {};
+  for (const p of parts) m[p.type] = p.value;
+  return `${m.year}-${m.month}-${m.day}T${m.hour}:${m.minute}:${m.second}`;
 }
 
 /** Step 1+2: open a session with Skedda, returning the bootstrap CSRF token and the publicRegisterPayload. */
