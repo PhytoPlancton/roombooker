@@ -285,11 +285,14 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
     const { session, publicRegisterPayload } = await bootstrapSession();
 
     await step(args, "create_venueuser");
-    // Use a unique guest email per booking to avoid the "user already exists" error.
-    // We embed the iCalUID short hash so the same meeting always uses the same guest email
-    // (idempotent if Skedda dedups, no-op otherwise).
-    const seed = (args.iCalUID || `${args.email}-${args.startsAt.toISOString()}`).replace(/[^a-zA-Z0-9]/g, "").slice(0, 24).toLowerCase();
-    const guestEmail = `rb-${seed}@example.com`;
+    // Skedda dedupes guests by email at the venue level, so to retry a different room
+    // for the same meeting we need a *different* email per attempt. We include the room
+    // name in the seed: deterministic per (meeting, room) but unique across rooms.
+    const baseSeed = (args.iCalUID || `${args.email}-${args.startsAt.toISOString()}`)
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 16)
+      .toLowerCase();
+    const guestEmail = `rb-${baseSeed}-${args.room.toLowerCase()}@example.com`;
 
     const { venueUserId, antiForgeryToken } = await createGuestVenueUser(session, publicRegisterPayload, {
       firstName: args.firstName,
