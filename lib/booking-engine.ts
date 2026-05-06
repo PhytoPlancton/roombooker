@@ -189,7 +189,14 @@ async function notifySuccess(user: UserDoc, args: ProcessBookingArgs, room: Room
     minute: "2-digit",
   });
   await notifyUser({
-    user: { ...user, telephone: user.telephone, notifChannels: user.notifChannels },
+    user: {
+      _id: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      telephone: user.telephone,
+      notifChannels: user.notifChannels,
+    },
+    iCalUID: args.iCalUID,
     smsText: `RoomBooker: salle ${room} reservée pour "${args.meeting.title}" - ${time}`,
     emailSubject: `Salle ${room} réservée pour ${args.meeting.title}`,
     emailHtml: `
@@ -210,7 +217,14 @@ async function notifyFailure(user: UserDoc, args: ProcessBookingArgs, reasonText
     minute: "2-digit",
   });
   await notifyUser({
-    user: { ...user, telephone: user.telephone, notifChannels: user.notifChannels },
+    user: {
+      _id: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      telephone: user.telephone,
+      notifChannels: user.notifChannels,
+    },
+    iCalUID: args.iCalUID,
     smsText: `RoomBooker: echec resa pour "${args.meeting.title}" (${time}). ${reasonText}`,
     emailSubject: `Échec de réservation pour ${args.meeting.title}`,
     emailHtml: `

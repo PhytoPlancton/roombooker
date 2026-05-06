@@ -3,8 +3,11 @@
  * Slack désactivé en MVP (SLACK_ENABLED=false).
  */
 
+import { audit } from "./audit";
+import type { ObjectId } from "mongodb";
+
 interface SmsArgs {
-  phoneNumber: string; // E.164 ex: +33612345678
+  phoneNumber: string; // E.164 ex: +33612345678 OR iCloud email
   text: string;
 }
 
@@ -12,6 +15,12 @@ interface EmailArgs {
   to: { email: string; name?: string };
   subject: string;
   htmlContent: string;
+}
+
+interface EdjSmsResponse {
+  success: boolean;
+  sent?: Array<unknown> | null;
+  failed?: Array<{ address: string; status: string; error: string }> | null;
 }
 
 export async function sendSms(args: SmsArgs): Promise<{ success: boolean; error?: string }> {
@@ -27,15 +36,21 @@ export async function sendSms(args: SmsArgs): Promise<{ success: boolean; error?
       },
       body: JSON.stringify({ address: args.phoneNumber, text: args.text }),
     });
+
+    // EDJ Labs returns HTTP 200 even when the gateway fails. The real status
+    // is in the `failed` array. We must inspect it.
     if (!res.ok) {
       const body = await res.text();
-      console.error("[sms] failed", { status: res.status, body });
-      return { success: false, error: `${res.status}: ${body}` };
+      return { success: false, error: `HTTP ${res.status}: ${body.slice(0, 200)}` };
+    }
+    const json = (await res.json()) as EdjSmsResponse;
+    if (json.failed && json.failed.length > 0) {
+      const f = json.failed[0];
+      return { success: false, error: `gateway: ${f.error} (status=${f.status})` };
     }
     return { success: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown";
-    console.error("[sms] exception", { message });
     return { success: false, error: message };
   }
 }
@@ -80,34 +95,43 @@ export async function sendEmail(args: EmailArgs): Promise<{ success: boolean; er
 }
 
 /**
- * Envoie une notif au sales sur tous ses canaux configurés.
+ * Envoie une notif au sales sur tous ses canaux configurés. Audit chaque résultat.
  */
 export async function notifyUser(args: {
   user: {
+    _id?: ObjectId;
     email: string;
     firstName: string;
     telephone: string | null;
     notifChannels: ("sms" | "email")[];
   };
+  iCalUID?: string;
   smsText: string;
   emailSubject: string;
   emailHtml: string;
 }): Promise<void> {
-  const { user, smsText, emailSubject, emailHtml } = args;
-  const tasks: Promise<unknown>[] = [];
+  const { user, smsText, emailSubject, emailHtml, iCalUID } = args;
 
   if (user.notifChannels.includes("sms") && user.telephone) {
-    tasks.push(sendSms({ phoneNumber: user.telephone, text: smsText }));
+    const r = await sendSms({ phoneNumber: user.telephone, text: smsText });
+    await audit({
+      action: r.success ? "notify_sent" : "error",
+      userId: user._id ?? null,
+      iCalUID: iCalUID ?? null,
+      details: { channel: "sms", to: user.telephone, success: r.success, error: r.error },
+    });
   }
   if (user.notifChannels.includes("email")) {
-    tasks.push(
-      sendEmail({
-        to: { email: user.email, name: user.firstName },
-        subject: emailSubject,
-        htmlContent: emailHtml,
-      }),
-    );
+    const r = await sendEmail({
+      to: { email: user.email, name: user.firstName },
+      subject: emailSubject,
+      htmlContent: emailHtml,
+    });
+    await audit({
+      action: r.success ? "notify_sent" : "error",
+      userId: user._id ?? null,
+      iCalUID: iCalUID ?? null,
+      details: { channel: "email", to: user.email, success: r.success, error: r.error },
+    });
   }
-
-  await Promise.allSettled(tasks);
 }
