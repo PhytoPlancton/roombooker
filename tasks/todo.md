@@ -1,7 +1,7 @@
 # RoomBooker — TODO
 
 **Démarré** : 2026-05-05
-**Phase actuelle** : 3 — Skedda Booker (Phase 0 ✅, Phase 1 ✅, Phase 2 ✅, Phase 3 code ✅)
+**Phase actuelle** : 5 — Annulation auto + bouton manuel (Phase 0-4 ✅)
 
 ---
 
@@ -213,10 +213,13 @@ SLACK_SIGNING_SECRET=
 - [ ] Slack stub (route + signature, désactivé)
 - [ ] Page `/action/reschedule?token=xxx` pour les liens magiques (décaler / annuler)
 
-### Phase 5 — Annulation / Déplacement
-- [ ] Détection event annulé dans webhook Calendar → annulation Skedda
-- [ ] Détection déplacement → cancel + re-book
-- [ ] Stratégie d'annulation Skedda (à investiguer en Phase 3)
+### Phase 5 — Annulation / Déplacement (CODE ✅, RUNTIME À VALIDER)
+- [x] Détection event annulé dans webhook Calendar → annulation Skedda auto (`lib/release-booking.ts` + branch `event.status === "cancelled"` dans webhook)
+- [x] Bouton "Annuler" dans le dashboard avec server action + auth check (booking appartient au sales loggué)
+- [x] Jitter 80-250ms entre les requêtes Skedda pour discrétion
+- [ ] Test runtime end-to-end : annuler meeting Calendar → vérif Skedda libéré + audit log
+- [ ] Test runtime : bouton "Annuler" dashboard fonctionne
+- [ ] **PHASE 6 / V2** : détection déplacement (start.dateTime change) → cancel old + re-book. Pour l'instant si le sales déplace, l'ancienne salle reste bloquée et la nouvelle date n'est pas re-bookée — le sales devra annuler manuellement et recréer le meeting.
 
 ### Phase 6 — Déploiement
 - [ ] DNS Cloudflare : A record `rooms` → 79.137.79.153 (DNS only)
