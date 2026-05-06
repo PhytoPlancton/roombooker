@@ -14,6 +14,18 @@ Format des entrées : `[date] | ce qui a mal tourné | règle pour l'éviter`
 
 ---
 
+## Knowledge — Skedda HTTP API (reverse engineered)
+
+Skedda n'a pas d'API publique mais le flow JSON utilisé par leur SPA est utilisable :
+1. `GET /booking` (avec User-Agent réaliste) → set cookie `X-Skedda-RequestVerificationCookie`, et extraire `__RequestVerificationToken` depuis `<input name="..." value="CfDJ8...">` (~155 chars).
+2. `GET /webs` (avec `Referer: /booking`) → JSON contenant `venue[0].publicRegisterPayload` (~176 chars). Sans User-Agent + Referer corrects, retourne `{errors:[...]}` avec "super detectives".
+3. `POST /venueusers` avec body `{venueuser: {termsAgreed:true, firstName, lastName, username:<EMAIL>, contactNumber, twoLetterCountryCode:"FR", registerMetadata:<publicRegisterPayload>, ...}}` + header `X-Skedda-RequestVerificationToken: <token de l'étape 1>`. Si email déjà venueuser → 422 "user already exists". Workaround : utiliser un email unique style `bot+<sales-id>@example.com`.
+4. `POST /bookings` avec body `{booking: {title, start, end, spaces:["<spaceId>"], venueuser:"<id retourné en 3>", venue:"189147", type:1, ...}}` + même token CSRF.
+
+**Venue ID Antler France** : `189147`. **Space IDs** : Jupiter=1117977, Venus=1117978, Earth=1117994, Mars=1117995, Mercury=1119104.
+
+**Limites** : la session est invalidée par Skedda si les headers ou le timing diffèrent d'un browser réel — implémenter en headless est faisable mais fragile, casserait au moindre changement Skedda. Plus stable d'utiliser un browser headless (Playwright) ou un SaaS (Browserless).
+
 ## Leçons issues du projet
 
 - **[2026-05-06]** | `playwright` en `^1.50.0` dans package.json + image Docker `mcr.microsoft.com/playwright:v1.50.0-jammy` → npm install résout sur la dernière 1.x.x dispo (1.59.1) et le binaire Chromium attendu par la lib npm n'existe pas dans l'image (`Executable doesn't exist at /ms-playwright/chromium_headless_shell-1217/...`). | **Toujours pin la version Playwright exacte** (sans `^` ni `~`) **ET aligner la balise de l'image Docker** : `playwright: "1.59.1"` ↔ `mcr.microsoft.com/playwright:v1.59.1-jammy`. Quand on bump l'un, on bump l'autre.
