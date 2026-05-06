@@ -6,6 +6,9 @@ Format des entrées : `[date] | ce qui a mal tourné | règle pour l'éviter`
 
 ## Règles pré-établies (init prompt)
 
+- **Titre Skedda** : utiliser **strictement** le `summary` de l'event Google Calendar du sales. **Jamais** ajouter de préfixe, commentaire, mention "test", ou texte inventé. Le `notes` reste à `null`. Idem pour tout texte qui sera visible publiquement (Skedda, mails sortants).
+
+
 - **DB connections** : MongoDB cluster partagé limité à 500 connexions simultanées. Toujours utiliser un client singleton avec pool capé (`maxPoolSize: 20`), jamais ouvrir/fermer de client par requête. Utiliser `withDb()` wrapper si possible.
 - **Données sensibles** : aucun mot de passe utilisateur ou token OAuth en clair en DB. Chiffrement AES-256-GCM obligatoire pour tout token donnant accès à des comptes externes.
 - **Identité** : ne jamais hardcoder ou écrire le nom complet de l'utilisateur dans le code, les commits, ou les logs. Utiliser des références génériques (`user`, `sales`, `admin`).
