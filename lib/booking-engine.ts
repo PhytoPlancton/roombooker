@@ -5,6 +5,7 @@ import { ROOM_SPACE_IDS, bookSkedda, type BookSkeddaResult } from "./skedda";
 import { notifyUser } from "./notify";
 import { updateEventLocation } from "./calendar";
 import { findUserById, type UserDoc } from "./users";
+import { audit } from "./audit";
 
 const MAX_DAYS_AHEAD = 10;
 
@@ -28,9 +29,20 @@ export interface ProcessBookingArgs {
  *  - Si succès, on met à jour le `location` de l'event Calendar avec le nom de la salle.
  */
 export async function processBookingForEvent(args: ProcessBookingArgs): Promise<void> {
+  await audit({
+    action: "booking_engine_started",
+    userId: args.userId,
+    iCalUID: args.iCalUID,
+    details: { startsAt: args.meeting.startsAt.toISOString() },
+  });
+
   const user = await findUserById(args.userId);
   if (!user) {
-    console.error("[engine] user not found", { userId: args.userId.toString() });
+    await audit({
+      action: "error",
+      iCalUID: args.iCalUID,
+      details: { where: "engine", reason: "user_not_found" },
+    });
     await markBookingResult({
       iCalUID: args.iCalUID,
       status: "failed",
@@ -41,12 +53,12 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
 
   const daysAhead = differenceInDays(args.meeting.startsAt, new Date());
   if (daysAhead > MAX_DAYS_AHEAD) {
-    console.log("[engine] meeting too far ahead, will be picked up by cron later", {
+    await audit({
+      action: "booking_engine_finished",
+      userId: args.userId,
       iCalUID: args.iCalUID,
-      daysAhead,
+      details: { result: "deferred_window", daysAhead },
     });
-    // On laisse le booking en status "pending" — un cron viendra le re-tenter
-    // quand on entrera dans la window de 10 jours
     return;
   }
 
@@ -59,7 +71,12 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
   let lastRoom: RoomName | null = null;
 
   for (const room of roomsToTry) {
-    console.log("[engine] trying room", { iCalUID: args.iCalUID, room: room.name });
+    await audit({
+      action: "skedda_attempt",
+      userId: args.userId,
+      iCalUID: args.iCalUID,
+      details: { room: room.name, spaceId: room.spaceId },
+    });
     const result = await bookSkedda({
       room: room.name,
       spaceId: room.spaceId,
@@ -77,6 +94,12 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     lastRoom = room.name;
 
     if (result.success) {
+      await audit({
+        action: "skedda_success",
+        userId: args.userId,
+        iCalUID: args.iCalUID,
+        details: { room: room.name, cancelLink: result.cancelLink },
+      });
       await markBookingResult({
         iCalUID: args.iCalUID,
         status: "booked",
@@ -88,14 +111,30 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
         eventId: args.googleEventId,
         location: room.name,
       }).catch((err) => {
-        console.error("[engine] failed to update event location", { err });
+        audit({
+          action: "error",
+          userId: args.userId,
+          iCalUID: args.iCalUID,
+          details: { where: "updateEventLocation", message: String(err) },
+        });
       });
       await notifySuccess(user, args, room.name);
+      await audit({
+        action: "booking_engine_finished",
+        userId: args.userId,
+        iCalUID: args.iCalUID,
+        details: { result: "booked", room: room.name },
+      });
       return;
     }
 
-    // If reason is "slot_unavailable" → try next room.
-    // For other reasons (window, hours, navigation) → no point trying more rooms.
+    await audit({
+      action: "skedda_failure",
+      userId: args.userId,
+      iCalUID: args.iCalUID,
+      details: { room: room.name, reason: result.reason, errorMessage: result.errorMessage },
+    });
+
     if (result.reason !== "slot_unavailable") {
       break;
     }
@@ -111,6 +150,12 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
 
   const reason = failure?.reason ?? "unknown";
   await notifyFailure(user, args, errorReasonText(reason, lastRoom));
+  await audit({
+    action: "booking_engine_finished",
+    userId: args.userId,
+    iCalUID: args.iCalUID,
+    details: { result: "failed", reason, lastRoom },
+  });
 }
 
 function errorReasonText(reason: string, lastRoom: RoomName | null): string {

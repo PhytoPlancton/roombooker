@@ -6,16 +6,25 @@ import { shouldBookRoom } from "@/lib/booking-rules";
 import { createPendingBooking, findBookingByICalUID } from "@/lib/bookings";
 import { activateWatchForUser } from "@/lib/watch";
 import { processBookingForEvent } from "@/lib/booking-engine";
+import { audit } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
-  // 1. Verify Google's signature
   const channelId = req.headers.get("x-goog-channel-id");
   const channelToken = req.headers.get("x-goog-channel-token");
   const resourceState = req.headers.get("x-goog-resource-state");
+  const messageNumber = req.headers.get("x-goog-message-number");
+
+  await audit({
+    action: "webhook_received",
+    details: { channelId, resourceState, messageNumber, hasToken: !!channelToken },
+  });
 
   const expectedToken = process.env.GOOGLE_WEBHOOK_TOKEN;
   if (!expectedToken || channelToken !== expectedToken) {
-    console.warn("Webhook rejected: invalid token", { channelId });
+    await audit({
+      action: "webhook_rejected_invalid_token",
+      details: { channelId, gotTokenLen: channelToken?.length || 0 },
+    });
     return NextResponse.json({ error: "invalid_token" }, { status: 401 });
   }
 
@@ -23,28 +32,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing_channel_id" }, { status: 400 });
   }
 
-  // sync = initial handshake from Google when watch is created — nothing to do
   if (resourceState === "sync") {
+    await audit({ action: "webhook_sync_handshake", details: { channelId } });
     return new NextResponse(null, { status: 200 });
   }
 
   const user = await findUserByWatchChannelId(channelId);
   if (!user) {
-    console.warn("Webhook rejected: unknown channel", { channelId });
+    await audit({
+      action: "webhook_unknown_channel",
+      details: { channelId },
+    });
     return NextResponse.json({ error: "unknown_channel" }, { status: 404 });
   }
 
   // Ack immediately, process asynchronously to keep response time < 30s
   void processChange(user).catch((err) => {
-    console.error("Calendar processChange failed", { userId: user._id.toString(), err });
+    audit({
+      action: "error",
+      userId: user._id,
+      details: { where: "processChange", message: String(err) },
+    });
   });
 
   return new NextResponse(null, { status: 200 });
 }
 
 async function processChange(user: UserDoc): Promise<void> {
+  await audit({
+    action: "sync_started",
+    userId: user._id,
+    details: { syncTokenLen: user.watchSyncToken?.length || 0 },
+  });
+
   if (!user.watchSyncToken) {
-    console.warn("User has no syncToken, re-initializing watch", { userId: user._id.toString() });
+    await audit({
+      action: "sync_needs_resync",
+      userId: user._id,
+      details: { reason: "no_sync_token" },
+    });
     await activateWatchForUser(user._id);
     return;
   }
@@ -52,37 +78,67 @@ async function processChange(user: UserDoc): Promise<void> {
   const result = await syncSince({ user, syncToken: user.watchSyncToken });
 
   if ("needsFullResync" in result) {
-    console.warn("syncToken expired, re-initializing watch", { userId: user._id.toString() });
+    await audit({
+      action: "sync_needs_resync",
+      userId: user._id,
+      details: { reason: "syncToken_expired" },
+    });
     await activateWatchForUser(user._id);
     return;
   }
 
   await updateWatchSyncToken(user._id, result.newSyncToken);
+  await audit({
+    action: "sync_completed",
+    userId: user._id,
+    details: { eventsCount: result.changedEvents.length },
+  });
 
   const internalDomain = process.env.INTERNAL_EMAIL_DOMAIN || "muchbetter.ai";
 
   for (const event of result.changedEvents) {
-    if (!event.iCalUID) continue;
+    if (!event.iCalUID) {
+      await audit({
+        action: "event_evaluated",
+        userId: user._id,
+        details: { skip: "no_iCalUID", title: event.summary },
+      });
+      continue;
+    }
 
     const decision = shouldBookRoom(event, {
       userEmail: user.email,
       internalDomain,
     });
 
-    if (!decision.shouldBook) {
-      // TODO: handle cancellation — release Skedda booking if event is cancelled
-      console.log("Skip event", {
-        iCalUID: event.iCalUID,
+    await audit({
+      action: "event_evaluated",
+      userId: user._id,
+      iCalUID: event.iCalUID,
+      details: {
+        title: event.summary || null,
+        decision: decision.shouldBook ? "book" : "skip",
         reason: decision.reason,
-        title: event.summary,
-      });
-      continue;
-    }
+        organizer: event.organizer?.email || null,
+        attendees: (event.attendees ?? []).map((a) => a.email).filter(Boolean),
+        recurring: !!event.recurringEventId,
+        location: event.location || null,
+        status: event.status,
+        start: event.start?.dateTime || null,
+        end: event.end?.dateTime || null,
+      },
+    });
 
-    // Dedup across multiple sales receiving the same event
+    if (!decision.shouldBook) continue;
+
     const existing = await findBookingByICalUID(event.iCalUID);
     if (existing) {
-      console.log("Booking already exists for iCalUID, skip", { iCalUID: event.iCalUID });
+      await audit({
+        action: "event_evaluated",
+        userId: user._id,
+        iCalUID: event.iCalUID,
+        details: { skip: "already_booked", existingStatus: existing.status },
+      });
       continue;
     }
 
@@ -104,24 +160,28 @@ async function processChange(user: UserDoc): Promise<void> {
       },
     });
 
-    console.log("Booking created (pending)", {
+    await audit({
+      action: "booking_created_pending",
+      userId: user._id,
       iCalUID: event.iCalUID,
-      userId: user._id.toString(),
-      bookingId: booking._id.toString(),
-      title: booking.meeting.title,
-      startsAt: booking.meeting.startsAt.toISOString(),
+      details: {
+        bookingId: booking._id.toString(),
+        title: booking.meeting.title,
+        startsAt: startsAt.toISOString(),
+      },
     });
 
-    // Hand off to Skedda booker (fire-and-forget)
     void processBookingForEvent({
       iCalUID: event.iCalUID,
       googleEventId: event.id!,
       userId: new ObjectId(user._id),
       meeting: booking.meeting,
     }).catch((err) => {
-      console.error("[engine] processBookingForEvent failed", {
+      audit({
+        action: "error",
+        userId: user._id,
         iCalUID: event.iCalUID,
-        err,
+        details: { where: "processBookingForEvent", message: String(err) },
       });
     });
   }
