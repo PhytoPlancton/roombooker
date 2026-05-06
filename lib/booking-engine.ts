@@ -88,6 +88,8 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       telephone: user.telephone || "",
       organization: process.env.INTERNAL_EMAIL_DOMAIN || "muchbetter.ai",
       title: args.meeting.title,
+      iCalUID: args.iCalUID,
+      userId: args.userId,
     });
 
     lastResult = result;
@@ -135,6 +137,8 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       details: { room: room.name, reason: result.reason, errorMessage: result.errorMessage },
     });
 
+    // Only retry the next room if this one was specifically unavailable.
+    // For form/navigation/timeout/window errors, retrying gives the same result.
     if (result.reason !== "slot_unavailable") {
       break;
     }

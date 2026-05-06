@@ -2,6 +2,7 @@ import { chromium, type Browser, type Page } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RoomName } from "./bookings";
+import { audit } from "./audit";
 
 export const ROOM_SPACE_IDS: Record<RoomName, number> = {
   Venus: 1117978,
@@ -22,6 +23,9 @@ export interface BookSkeddaArgs {
   telephone: string;
   organization: string;
   title: string;
+  // Optional context to thread audit logs back to the right booking
+  iCalUID?: string;
+  userId?: import("mongodb").ObjectId;
 }
 
 export type BookSkeddaResult =
@@ -34,12 +38,14 @@ export type BookSkeddaResult =
         | "window_too_far"
         | "form_unexpected"
         | "navigation_failed"
+        | "timeout"
         | "unknown";
       errorMessage: string;
       screenshotPath: string | null;
     };
 
 const SCREENSHOT_DIR = "/app/debug-screenshots";
+const GLOBAL_TIMEOUT_MS = 90_000; // hard ceiling : kill l'opération après 90s
 
 function buildBookingUrl(spaceId: number, startsAt: Date, endsAt: Date): string {
   const venueUrl = process.env.SKEDDA_VENUE_URL || "https://antlerfrance.skedda.com";
@@ -54,7 +60,6 @@ function buildBookingUrl(spaceId: number, startsAt: Date, endsAt: Date): string 
   return `${venueUrl}/booking?${params.toString()}`;
 }
 
-/** YYYY-MM-DDTHH:MM:SS sans timezone (Skedda interprète en horaire venue) */
 function formatLocalIso(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return (
@@ -90,47 +95,82 @@ async function dumpHtml(page: Page, name: string): Promise<string | null> {
   }
 }
 
+async function step(args: BookSkeddaArgs, label: string, extra: Record<string, unknown> = {}) {
+  await audit({
+    action: "skedda_attempt",
+    userId: args.userId ?? null,
+    iCalUID: args.iCalUID ?? null,
+    details: { step: label, room: args.room, ...extra },
+  });
+}
+
 export async function bookSkedda(args: BookSkeddaArgs): Promise<BookSkeddaResult> {
+  // Hard global timeout — Promise.race against the booking flow
+  const timeoutPromise = new Promise<BookSkeddaResult>((resolve) => {
+    setTimeout(() => {
+      resolve({
+        success: false,
+        reason: "timeout",
+        errorMessage: `Global timeout (${GLOBAL_TIMEOUT_MS}ms)`,
+        screenshotPath: null,
+      });
+    }, GLOBAL_TIMEOUT_MS);
+  });
+
+  return Promise.race([bookSkeddaInner(args), timeoutPromise]);
+}
+
+async function bookSkeddaInner(args: BookSkeddaArgs): Promise<BookSkeddaResult> {
   let browser: Browser | null = null;
   try {
+    await step(args, "launching_browser");
     browser = await chromium.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+      args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
     });
+
     const ctx = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
     });
     const page = await ctx.newPage();
 
     const url = buildBookingUrl(args.spaceId, args.startsAt, args.endsAt);
-    console.log("[skedda] navigate", { url, room: args.room });
+    await step(args, "goto", { url });
 
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+    // domcontentloaded est plus robuste que networkidle pour les SPAs qui font du polling
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25_000 });
+    await step(args, "loaded");
 
-    // ---- Email gate (Skedda demande l'email avant le formulaire principal) ----
+    // ---- Email gate ----
     const emailInput = page.locator('input[type="email"]').first();
-    if (await emailInput.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      console.log("[skedda] filling email gate");
+    const hasEmailGate = await emailInput
+      .isVisible({ timeout: 5_000 })
+      .catch(() => false);
+
+    if (hasEmailGate) {
+      await step(args, "email_gate_visible");
       await emailInput.fill(args.email);
-      // Bouton "Continue" / "Next" / "Submit"
       const nextBtn = page
-        .getByRole("button", { name: /(continue|next|submit|suivant|valider)/i })
+        .getByRole("button", { name: /(continue|next|submit|suivant|valider|next|c'est parti|let's go)/i })
         .first();
       if (await nextBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
         await nextBtn.click();
+        await step(args, "email_gate_submitted");
       }
+    } else {
+      await step(args, "no_email_gate");
     }
 
-    // ---- Formulaire principal ----
-    // Wait for "First name" field — c'est le marqueur fiable que le form est ouvert
+    // ---- Form principal ----
     const firstNameField = page.getByLabel(/first ?name/i).first();
     try {
       await firstNameField.waitFor({ state: "visible", timeout: 15_000 });
+      await step(args, "form_visible");
     } catch {
       const screenshot = await captureScreenshot(page, "form-not-shown");
       await dumpHtml(page, "form-not-shown");
-      // Cas spécifique : "more than 10 day(s)" au top de la page
       const errorText = await page.locator("body").innerText().catch(() => "");
       if (/more than \d+ day/i.test(errorText)) {
         return {
@@ -143,7 +183,7 @@ export async function bookSkedda(args: BookSkeddaArgs): Promise<BookSkeddaResult
       return {
         success: false,
         reason: "form_unexpected",
-        errorMessage: "Booking form did not appear",
+        errorMessage: `Form did not appear. Body excerpt: ${errorText.slice(0, 300)}`,
         screenshotPath: screenshot,
       };
     }
@@ -162,24 +202,24 @@ export async function bookSkedda(args: BookSkeddaArgs): Promise<BookSkeddaResult
       await titleField.fill(args.title);
     }
 
-    // Terms checkbox — peut être identifié par "terms" ou "privacy"
     const termsCheckbox = page.locator('input[type="checkbox"]').first();
     if (await termsCheckbox.isVisible({ timeout: 1_000 }).catch(() => false)) {
       const checked = await termsCheckbox.isChecked().catch(() => false);
       if (!checked) await termsCheckbox.check();
     }
 
-    // ---- Submit ----
+    await step(args, "form_filled");
+
     const confirmBtn = page
       .getByRole("button", { name: /confirm booking|confirmer|confirm/i })
       .first();
     await confirmBtn.click();
+    await step(args, "confirm_clicked");
 
-    // Wait for confirmation or error
-    // Success markers: "booking confirmed", "thank you", "réservation confirmée"
-    // Error markers: red banner, "already booked", "outside hours"
-    const successPattern = /booking confirmed|réservation confirmée|thank you|merci|booking has been/i;
-    const errorPattern = /already booked|conflict|already taken|outside|hors|not available|indisponible|more than \d+ day/i;
+    const successPattern =
+      /booking confirmed|réservation confirmée|thank you|merci|booking has been|successfully/i;
+    const errorPattern =
+      /already booked|conflict|already taken|outside|hors|not available|indisponible|more than \d+ day/i;
 
     const result = await Promise.race([
       page
@@ -194,16 +234,15 @@ export async function bookSkedda(args: BookSkeddaArgs): Promise<BookSkeddaResult
         .then(() => "error" as const),
     ]).catch(() => "timeout" as const);
 
+    await step(args, "submit_resolved", { result });
+
     if (result === "success") {
-      // Try to extract a cancel link from the confirmation
       const cancelLink = await page
         .locator("a")
         .filter({ hasText: /cancel|annuler/i })
         .first()
         .getAttribute("href")
         .catch(() => null);
-
-      console.log("[skedda] booking confirmed", { room: args.room, cancelLink });
       return { success: true, cancelLink };
     }
 
@@ -214,7 +253,7 @@ export async function bookSkedda(args: BookSkeddaArgs): Promise<BookSkeddaResult
       return {
         success: false,
         reason: "window_too_far",
-        errorMessage: "Booking too far in the future (Skedda 10-day window)",
+        errorMessage: "Booking too far in the future",
         screenshotPath: screenshot,
       };
     }
@@ -243,7 +282,6 @@ export async function bookSkedda(args: BookSkeddaArgs): Promise<BookSkeddaResult
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
-    console.error("[skedda] booking exception", { message });
     return {
       success: false,
       reason: "navigation_failed",
@@ -251,6 +289,6 @@ export async function bookSkedda(args: BookSkeddaArgs): Promise<BookSkeddaResult
       screenshotPath: null,
     };
   } finally {
-    if (browser) await browser.close();
+    if (browser) await browser.close().catch(() => {});
   }
 }
