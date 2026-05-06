@@ -89,6 +89,12 @@ function parseSetCookie(headers: Headers, cookies: Map<string, string>): void {
   }
 }
 
+/** Small randomized jitter to keep request pacing closer to a human browsing session. */
+async function jitter(minMs = 80, maxMs = 250): Promise<void> {
+  const ms = Math.floor(minMs + Math.random() * (maxMs - minMs));
+  await new Promise((r) => setTimeout(r, ms));
+}
+
 function commonHeaders(session: SkeddaSession | null = null, extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = {
     "User-Agent": UA,
@@ -167,6 +173,8 @@ async function bootstrapSession(): Promise<{ session: SkeddaSession; publicRegis
   const csrfToken = m[1];
 
   const session: SkeddaSession = { cookies, csrfToken };
+
+  await jitter();
 
   // 2. GET /webs → publicRegisterPayload
   const websResp = await fetch(`${SKEDDA_BASE}/webs`, { headers: commonHeaders(session) });
@@ -317,6 +325,8 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
 
     // Switch to the new CSRF token for subsequent calls
     session.csrfToken = antiForgeryToken;
+
+    await jitter();
 
     await step(args, "create_booking", { venueUserId });
     const { bookingId } = await createBooking(session, {

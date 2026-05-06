@@ -7,6 +7,7 @@ import { createPendingBooking, findBookingByICalUID } from "@/lib/bookings";
 import { activateWatchForUser } from "@/lib/watch";
 import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
+import { releaseBookingByICalUIDAuto } from "@/lib/release-booking";
 
 export async function POST(req: NextRequest) {
   const channelId = req.headers.get("x-goog-channel-id");
@@ -102,6 +103,23 @@ async function processChange(user: UserDoc): Promise<void> {
         action: "event_evaluated",
         userId: user._id,
         details: { skip: "no_iCalUID", title: event.summary },
+      });
+      continue;
+    }
+
+    // If the meeting was cancelled in Google Calendar, release the Skedda room.
+    if (event.status === "cancelled") {
+      const release = await releaseBookingByICalUIDAuto(event.iCalUID);
+      await audit({
+        action: "event_evaluated",
+        userId: user._id,
+        iCalUID: event.iCalUID,
+        details: {
+          decision: "cancel",
+          source: "calendar_cancelled",
+          released: release.ok,
+          releaseReason: release.reason,
+        },
       });
       continue;
     }

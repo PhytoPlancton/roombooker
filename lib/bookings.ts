@@ -48,6 +48,11 @@ export async function findBookingByICalUID(iCalUID: string): Promise<BookingDoc 
   return col.findOne({ iCalUID });
 }
 
+export async function findBookingById(id: ObjectId): Promise<BookingDoc | null> {
+  const col = await bookingsCol();
+  return col.findOne({ _id: id });
+}
+
 export async function createPendingBooking(args: {
   iCalUID: string;
   googleEventId: string;
