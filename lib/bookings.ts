@@ -19,6 +19,8 @@ export interface BookingDoc {
   room: RoomName | null;
   skeddaBookingRef: string | null;
   skeddaCancelLink: string | null;
+  skeddaCancelToken: string | null;  // antiForgeryToken — needed to DELETE
+  skeddaCookies: string | null;       // serialized cookies — needed to DELETE
   status: "pending" | "booked" | "cancelled" | "failed";
   failureReason: string | null;
   createdAt: Date;
@@ -63,6 +65,8 @@ export async function createPendingBooking(args: {
     room: null,
     skeddaBookingRef: null,
     skeddaCancelLink: null,
+    skeddaCancelToken: null,
+    skeddaCookies: null,
     status: "pending",
     failureReason: null,
     createdAt: now,
@@ -87,6 +91,8 @@ export async function markBookingResult(args: {
   room?: RoomName;
   skeddaBookingRef?: string;
   skeddaCancelLink?: string;
+  skeddaCancelToken?: string;
+  skeddaCookies?: string;
   failureReason?: string;
 }): Promise<void> {
   const col = await bookingsCol();
@@ -94,6 +100,8 @@ export async function markBookingResult(args: {
   if (args.room !== undefined) update.room = args.room;
   if (args.skeddaBookingRef !== undefined) update.skeddaBookingRef = args.skeddaBookingRef;
   if (args.skeddaCancelLink !== undefined) update.skeddaCancelLink = args.skeddaCancelLink;
+  if (args.skeddaCancelToken !== undefined) update.skeddaCancelToken = args.skeddaCancelToken;
+  if (args.skeddaCookies !== undefined) update.skeddaCookies = args.skeddaCookies;
   if (args.failureReason !== undefined) update.failureReason = args.failureReason;
   await col.updateOne({ iCalUID: args.iCalUID }, { $set: update });
 }

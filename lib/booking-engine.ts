@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { differenceInDays } from "date-fns";
 import { ROOM_PRIORITY, type RoomName, markBookingResult } from "./bookings";
-import { ROOM_SPACE_IDS, bookSkedda, type BookSkeddaResult } from "./skedda";
+import { ROOM_SPACE_IDS, bookSkeddaHttp, type BookSkeddaResult } from "./skedda-http";
 import { notifyUser } from "./notify";
 import { updateEventLocation } from "./calendar";
 import { findUserById, type UserDoc } from "./users";
@@ -77,7 +77,7 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       iCalUID: args.iCalUID,
       details: { room: room.name, spaceId: room.spaceId },
     });
-    const result = await bookSkedda({
+    const result = await bookSkeddaHttp({
       room: room.name,
       spaceId: room.spaceId,
       startsAt: args.meeting.startsAt,
@@ -86,7 +86,6 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       lastName: user.lastName,
       email: user.email,
       telephone: user.telephone || "",
-      organization: process.env.INTERNAL_EMAIL_DOMAIN || "muchbetter.ai",
       title: args.meeting.title,
       iCalUID: args.iCalUID,
       userId: args.userId,
@@ -100,13 +99,15 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
         action: "skedda_success",
         userId: args.userId,
         iCalUID: args.iCalUID,
-        details: { room: room.name, cancelLink: result.cancelLink },
+        details: { room: room.name, skeddaBookingId: result.skeddaBookingId },
       });
       await markBookingResult({
         iCalUID: args.iCalUID,
         status: "booked",
         room: room.name,
-        skeddaCancelLink: result.cancelLink ?? undefined,
+        skeddaBookingRef: result.skeddaBookingId,
+        skeddaCancelToken: result.cancelToken,
+        skeddaCookies: result.cookies,
       });
       await updateEventLocation({
         user,

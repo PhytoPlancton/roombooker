@@ -14,7 +14,6 @@
     "react-dom": "^19.0.0",
     "mongodb": "^6.10.0",
     "googleapis": "^144.0.0",
-    "playwright": "1.59.1",
     "iron-session": "^8.0.4",
     "zod": "^3.23.8",
     "date-fns": "^4.1.0"
