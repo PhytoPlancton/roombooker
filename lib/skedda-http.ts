@@ -30,8 +30,8 @@ const UA =
 
 // PRIVACY: never leak the real meeting title to Skedda (visible to other Antler users).
 // The sales' name IS shared (so colleagues know who booked) but NOT the meeting subject.
-// Skedda has bookingTitleRequired=false for this venue, so we send an empty string.
-const PUBLIC_BOOKING_TITLE = "";
+// Send null (matches what real users do — most listed bookings have title=null).
+const PUBLIC_BOOKING_TITLE: string | null = null;
 
 export interface BookSkeddaArgs {
   room: RoomName;
@@ -232,7 +232,7 @@ async function createGuestVenueUser(
 /** Step 4: create the booking. */
 async function createBooking(
   session: SkeddaSession,
-  args: { venueUserId: string; spaceId: number; startsAt: Date; endsAt: Date; title: string },
+  args: { venueUserId: string; spaceId: number; startsAt: Date; endsAt: Date; title: string | null },
 ): Promise<{ bookingId: string }> {
   const body = {
     booking: {
