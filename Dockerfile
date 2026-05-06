@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Image runtime avec Chromium déjà installé pour Playwright
-ARG PW_IMAGE=mcr.microsoft.com/playwright:v1.50.0-jammy
+ARG PW_IMAGE=mcr.microsoft.com/playwright:v1.59.1-jammy
 
 # ---- deps ----
 FROM ${PW_IMAGE} AS deps
