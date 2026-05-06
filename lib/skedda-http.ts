@@ -30,7 +30,8 @@ const UA =
 
 // PRIVACY: never leak the real meeting title to Skedda (visible to other Antler users).
 // The sales' name IS shared (so colleagues know who booked) but NOT the meeting subject.
-const PUBLIC_BOOKING_TITLE = "Booking";
+// Skedda has bookingTitleRequired=false for this venue, so we send an empty string.
+const PUBLIC_BOOKING_TITLE = "";
 
 export interface BookSkeddaArgs {
   room: RoomName;
