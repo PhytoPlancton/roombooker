@@ -28,6 +28,10 @@ const SKEDDA_BASE = "https://antlerfrance.skedda.com";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 
+// PRIVACY: never leak the real meeting title to Skedda (visible to other Antler users).
+// The sales' name IS shared (so colleagues know who booked) but NOT the meeting subject.
+const PUBLIC_BOOKING_TITLE = "Booking";
+
 export interface BookSkeddaArgs {
   room: RoomName;
   spaceId: number;
@@ -295,10 +299,10 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
     const guestEmail = `rb-${baseSeed}-${args.room.toLowerCase()}@example.com`;
 
     const { venueUserId, antiForgeryToken } = await createGuestVenueUser(session, publicRegisterPayload, {
-      firstName: args.firstName,
+      firstName: args.firstName, // real sales' first name (visible: "Nicolas M")
       lastName: args.lastName,
-      email: guestEmail,
-      telephone: args.telephone,
+      email: guestEmail,         // anonymized email — Skedda dedupes guests by email
+      telephone: args.telephone, // real phone (used by venue admin if needed, not public)
     });
 
     // Switch to the new CSRF token for subsequent calls
@@ -310,7 +314,7 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
       spaceId: args.spaceId,
       startsAt: args.startsAt,
       endsAt: args.endsAt,
-      title: args.title,
+      title: PUBLIC_BOOKING_TITLE, // PRIVACY: never send the real meeting title
     });
 
     await step(args, "booked", { bookingId });

@@ -6,7 +6,7 @@ Format des entrées : `[date] | ce qui a mal tourné | règle pour l'éviter`
 
 ## Règles pré-établies (init prompt)
 
-- **Titre Skedda** : utiliser **strictement** le `summary` de l'event Google Calendar du sales. **Jamais** ajouter de préfixe, commentaire, mention "test", ou texte inventé. Le `notes` reste à `null`. Idem pour tout texte qui sera visible publiquement (Skedda, mails sortants).
+- **Titre Skedda PRIVÉ** : Skedda affiche le titre du booking publiquement à toute l'incubateur. **NE JAMAIS y mettre le titre du meeting Google Calendar** (peut contenir noms de prospects, montants, infos confidentielles). Toujours envoyer une constante neutre type `"Booking"`. Le `notes` reste à `null`. Le firstName/lastName du sales SONT visibles (c'est OK, voire utile : les collègues savent qui a réservé).
 
 
 - **DB connections** : MongoDB cluster partagé limité à 500 connexions simultanées. Toujours utiliser un client singleton avec pool capé (`maxPoolSize: 20`), jamais ouvrir/fermer de client par requête. Utiliser `withDb()` wrapper si possible.
