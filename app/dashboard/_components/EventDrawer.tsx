@@ -181,8 +181,9 @@ export function EventDrawer({ event, open, onClose, cancelAction, onActionToast 
               <div className="detail-row">
                 <span className="detail-label">Salle</span>
                 <div className="detail-value">
-                  <strong>{room.name}</strong> — {room.cap} places
-                  <div className="detail-value-sub">{room.desc}</div>
+                  <strong>{room.name}</strong>
+                  {room.cap !== null && <> — {room.cap} place{room.cap > 1 ? "s" : ""}</>}
+                  {room.desc && <div className="detail-value-sub">{room.desc}</div>}
                 </div>
               </div>
             )}

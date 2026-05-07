@@ -9,17 +9,19 @@ export interface RoomMeta {
   id: RoomName;
   slug: "jupiter" | "venus" | "earth" | "mars" | "mercury";
   name: string;
-  cap: number;
+  cap: number | null;
   color: string;
   desc: string;
 }
 
+// 5 salles physiques de l'incubateur Antler France (ordre = ordre par défaut d'affichage).
+// Mercury & Jupiter : description non renseignée par le user → on n'affiche rien.
 export const ROOMS: RoomMeta[] = [
-  { id: "Jupiter", slug: "jupiter", name: "Jupiter", cap: 12, color: "#E07856", desc: "Boardroom" },
-  { id: "Earth",   slug: "earth",   name: "Earth",   cap: 8,  color: "#2B7A4B", desc: "Demo room" },
-  { id: "Venus",   slug: "venus",   name: "Venus",   cap: 3,  color: "#B86CB1", desc: "Huddle" },
-  { id: "Mars",    slug: "mars",    name: "Mars",    cap: 3,  color: "#C24A38", desc: "Huddle" },
-  { id: "Mercury", slug: "mercury", name: "Mercury", cap: 2,  color: "#8A8FB5", desc: "Phone booth" },
+  { id: "Jupiter", slug: "jupiter", name: "Jupiter", cap: null, color: "#E07856", desc: "" },
+  { id: "Venus",   slug: "venus",   name: "Venus",   cap: 2,    color: "#B86CB1", desc: "2 personnes · table" },
+  { id: "Earth",   slug: "earth",   name: "Earth",   cap: 10,   color: "#2B7A4B", desc: "Salle de réunion" },
+  { id: "Mars",    slug: "mars",    name: "Mars",    cap: 2,    color: "#C24A38", desc: "2 personnes · table" },
+  { id: "Mercury", slug: "mercury", name: "Mercury", cap: null, color: "#8A8FB5", desc: "" },
 ];
 
 export const roomById = (id: string | null | undefined): RoomMeta | undefined =>

@@ -58,7 +58,10 @@ export default async function RoomsPage() {
                   <div>
                     <h3 className="room-card-name">{r.name}</h3>
                     <span className="room-card-cap">
-                      {r.cap} places · {r.desc}
+                      {r.cap !== null ? `${r.cap} place${r.cap > 1 ? "s" : ""}` : ""}
+                      {r.cap !== null && r.desc ? " · " : ""}
+                      {r.desc}
+                      {r.cap === null && !r.desc ? "—" : ""}
                     </span>
                   </div>
                 </div>

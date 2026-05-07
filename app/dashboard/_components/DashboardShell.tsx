@@ -175,7 +175,7 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
                       </div>
                       <div>
                         <p className="room-info-name">{r.name}</p>
-                        <span className="room-info-cap">{r.cap} pl.</span>
+                        <span className="room-info-cap">{r.cap !== null ? `${r.cap} pl.` : "—"}</span>
                       </div>
                       <div className="room-load">
                         <strong>{shown}</strong>
