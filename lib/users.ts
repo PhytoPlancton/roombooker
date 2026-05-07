@@ -14,6 +14,26 @@ export interface DecryptedTokens {
   expiresAt: Date;
 }
 
+/**
+ * Trigger rules — each one is independent. The booking is triggered
+ * if AT LEAST ONE enabled rule matches the meeting (OR logic).
+ * Hardcoded prerequisites (organizer, not recurring, not cancelled,
+ * location empty) still apply on top.
+ */
+export interface BookingRules {
+  externalAttendee: { enabled: boolean };                      // any non-@muchbetter.ai attendee
+  titleKeywords: { enabled: boolean; keywords: string[] };     // case-insensitive substring match
+  invitedEmails: { enabled: boolean; emails: string[] };       // exact email match in attendees
+  descriptionKeywords: { enabled: boolean; keywords: string[] }; // case-insensitive substring in event.description
+}
+
+export const DEFAULT_BOOKING_RULES: BookingRules = {
+  externalAttendee: { enabled: true },
+  titleKeywords: { enabled: false, keywords: [] },
+  invitedEmails: { enabled: false, emails: [] },
+  descriptionKeywords: { enabled: false, keywords: [] },
+};
+
 export interface UserDoc {
   _id: ObjectId;
   email: string;
@@ -27,6 +47,7 @@ export interface UserDoc {
   watchSyncToken: string | null;
   slackUserId: string | null;
   notifChannels: ("sms" | "email")[];
+  bookingRules?: BookingRules; // optional for backwards-compat with existing users — fall back to DEFAULT
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,6 +108,7 @@ export async function upsertUserOnLogin(args: {
         watchSyncToken: null,
         slackUserId: null,
         notifChannels: ["sms", "email"],
+        bookingRules: DEFAULT_BOOKING_RULES,
         createdAt: now,
       },
     },
@@ -94,6 +116,14 @@ export async function upsertUserOnLogin(args: {
   );
   if (!result) throw new Error("Upsert failed");
   return result;
+}
+
+export async function setBookingRules(userId: ObjectId, rules: BookingRules): Promise<void> {
+  const col = await usersCol();
+  await col.updateOne(
+    { _id: userId },
+    { $set: { bookingRules: rules, updatedAt: new Date() } },
+  );
 }
 
 export async function setTelephone(userId: ObjectId, telephone: string): Promise<void> {

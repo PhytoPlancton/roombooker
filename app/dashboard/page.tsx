@@ -3,7 +3,57 @@ import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/session";
 import { findUserById } from "@/lib/users";
 import { listBookingsForUser } from "@/lib/bookings";
-import { activateWatchAction, cancelBookingAction, deactivateWatchAction } from "./actions";
+import { DEFAULT_BOOKING_RULES } from "@/lib/users";
+import { activateWatchAction, cancelBookingAction, deactivateWatchAction, saveRulesAction } from "./actions";
+
+function RuleRow({
+  id,
+  label,
+  help,
+  placeholder,
+  enabled,
+  listValue,
+}: {
+  id: string;
+  label: string;
+  help: string;
+  placeholder?: string;
+  enabled: boolean;
+  listValue: string | null;
+}) {
+  return (
+    <div style={{ marginBottom: "1.1rem", paddingBottom: "1rem", borderBottom: "1px dashed #eee" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          name={`${id}_enabled`}
+          defaultChecked={enabled}
+          style={{ width: 18, height: 18 }}
+        />
+        <span style={{ fontWeight: 600 }}>{label}</span>
+      </label>
+      <p style={{ color: "#666", fontSize: "0.85rem", margin: "0.25rem 0 0.5rem 1.8rem" }}>
+        {help}
+      </p>
+      {listValue !== null && (
+        <input
+          type="text"
+          name={`${id}_list`}
+          defaultValue={listValue}
+          placeholder={placeholder}
+          style={{
+            marginLeft: "1.8rem",
+            width: "calc(100% - 1.8rem)",
+            padding: "0.5rem",
+            fontSize: "0.9rem",
+            border: "1px solid #ccc",
+            borderRadius: 4,
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 interface PageProps {
   searchParams: Promise<{ error?: string; success?: string }>;
@@ -21,6 +71,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const bookings = await listBookingsForUser(user._id, 20);
   const watchActive = !!user.watchChannelId && !!user.watchExpiry && user.watchExpiry > new Date();
+  const rules = user.bookingRules ?? DEFAULT_BOOKING_RULES;
 
   return (
     <main style={{ padding: "3rem 2rem", maxWidth: 920, margin: "0 auto" }}>
@@ -74,6 +125,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             success === "watch_activated" ? "Surveillance activée" :
             success === "watch_deactivated" ? "Surveillance désactivée" :
             success === "cancelled" ? "Réservation annulée" :
+            success === "rules_saved" ? "Règles enregistrées" :
             "Action effectuée"
           }
         </div>
@@ -133,6 +185,71 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </button>
           </form>
         )}
+      </section>
+
+      <section style={{
+        padding: "1.5rem",
+        background: "#fff",
+        border: "1px solid #e5e5e5",
+        borderRadius: 8,
+        marginBottom: "1.5rem",
+      }}>
+        <h2 style={{ fontSize: "1.1rem", marginBottom: "0.25rem" }}>Mes règles de réservation auto</h2>
+        <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
+          Une réunion est réservée si <strong>au moins une règle activée</strong> correspond. Les meetings récurrents,
+          déjà avec une location, ou dont tu n'es pas l'organisateur ne sont jamais bookés.
+        </p>
+
+        <form action={saveRulesAction}>
+          <RuleRow
+            id="externalAttendee"
+            label="Au moins un invité externe"
+            help="Déclenche si un invité a un email hors @muchbetter.ai. Recommandé."
+            enabled={rules.externalAttendee.enabled}
+            listValue={null}
+          />
+          <RuleRow
+            id="titleKeywords"
+            label="Mot-clé dans le titre"
+            help="Déclenche si le titre contient un de ces mots (insensible à la casse, virgule pour séparer)."
+            placeholder="demo, pitch, client"
+            enabled={rules.titleKeywords.enabled}
+            listValue={rules.titleKeywords.keywords.join(", ")}
+          />
+          <RuleRow
+            id="invitedEmails"
+            label="Email d'invité spécifique"
+            help="Déclenche si un de ces emails est invité au meeting."
+            placeholder="prospect@bigco.com, alice@example.com"
+            enabled={rules.invitedEmails.enabled}
+            listValue={rules.invitedEmails.emails.join(", ")}
+          />
+          <RuleRow
+            id="descriptionKeywords"
+            label="Mot-clé dans la description"
+            help="Déclenche si la description du meeting contient un de ces mots. Pratique pour forcer un booking."
+            placeholder="ROOM_BOOK, room"
+            enabled={rules.descriptionKeywords.enabled}
+            listValue={rules.descriptionKeywords.keywords.join(", ")}
+          />
+
+          <button
+            type="submit"
+            style={{
+              marginTop: "1rem",
+              padding: "0.6rem 1.2rem",
+              background: "#1a73e8",
+              color: "#fff",
+              border: 0,
+              borderRadius: 4,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontSize: "0.9rem",
+            }}
+          >
+            Enregistrer les règles
+          </button>
+        </form>
       </section>
 
       <section style={{

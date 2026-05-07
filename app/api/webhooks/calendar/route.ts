@@ -127,6 +127,7 @@ async function processChange(user: UserDoc): Promise<void> {
     const decision = shouldBookRoom(event, {
       userEmail: user.email,
       internalDomain,
+      rules: user.bookingRules,
     });
 
     await audit({
@@ -172,7 +173,7 @@ async function processChange(user: UserDoc): Promise<void> {
         // fall through to the create-booking flow below
       } else if (
         !decision.shouldBook &&
-        (decision.reason === "no_external_attendee" || decision.reason === "location_already_set")
+        (decision.reason === "no_rule_matched" || decision.reason === "location_already_set")
       ) {
         // Same date but conditions broke (last external attendee removed,
         // or sales filled location manually) → release the room.
