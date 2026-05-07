@@ -15,10 +15,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const bookings = await listBookingsForUser(user._id, 50);
   const syncedCount = bookings.filter((b) => b.status === "booked").length;
   const userName = `${user.firstName} ${user.lastName}`.trim() || user.email;
+  const isAdmin = user.email === "nicolas.monniot@muchbetter.ai";
 
   return (
     <div className="app">
-      <Topnav userName={userName} syncedCount={syncedCount} />
+      <Topnav userName={userName} syncedCount={syncedCount} isAdmin={isAdmin} />
       <main>{children}</main>
     </div>
   );
