@@ -187,7 +187,7 @@ function ConnectionsSection({
           email="antlerfrance.skedda.com"
           ok={true}
           metaPrimary="Lecture & écriture"
-          metaSecondary="Booking via API HTTP"
+          metaSecondary="Booking via HTTP"
         />
       </div>
 
