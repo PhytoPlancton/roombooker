@@ -157,7 +157,7 @@ async function processChange(user: UserDoc): Promise<void> {
       const dateChanged = newStartMs !== null && newStartMs !== oldStartMs;
 
       if (dateChanged) {
-        // Meeting moved → release old, then fall through to re-book at the new date.
+        // Meeting moved → release old, then re-book at the new date.
         await releaseBookingByICalUIDAuto(event.iCalUID);
         await deleteBookingByICalUID(event.iCalUID);
         await audit({
@@ -170,7 +170,12 @@ async function processChange(user: UserDoc): Promise<void> {
             newStart: new Date(newStartMs!).toISOString(),
           },
         });
-        // fall through to the create-booking flow below
+        // Force the re-booking flow regardless of decision.shouldBook.
+        // shouldBookRoom would say "location_already_set" because the Calendar
+        // event still carries the old room name in its location field — but
+        // we want to re-book anyway (we just released the old slot).
+        await startBookingFlow(user, event);
+        continue;
       } else if (!decision.shouldBook && decision.reason === "location_already_set") {
         // CRITICAL: when we successfully book a room, we update the Calendar
         // event's location field with the room name. Google then immediately
@@ -235,47 +240,57 @@ async function processChange(user: UserDoc): Promise<void> {
       continue;
     }
 
-    const startsAt = new Date(event.start!.dateTime!);
-    const endsAt = new Date(event.end!.dateTime!);
-    const attendees = (event.attendees ?? [])
-      .map((a) => a.email)
-      .filter((e): e is string => typeof e === "string");
+    await startBookingFlow(user, event);
+  }
+}
 
-    const booking = await createPendingBooking({
-      iCalUID: event.iCalUID,
-      googleEventId: event.id!,
-      userId: new ObjectId(user._id),
-      meeting: {
-        title: event.summary || "(sans titre)",
-        startsAt,
-        endsAt,
-        attendees,
-      },
-    });
+/** Persist a pending booking and kick off the Skedda booking engine. */
+async function startBookingFlow(
+  user: UserDoc,
+  event: import("googleapis").calendar_v3.Schema$Event,
+): Promise<void> {
+  if (!event.iCalUID || !event.start?.dateTime || !event.end?.dateTime || !event.id) return;
 
-    await audit({
-      action: "booking_created_pending",
+  const startsAt = new Date(event.start.dateTime);
+  const endsAt = new Date(event.end.dateTime);
+  const attendees = (event.attendees ?? [])
+    .map((a) => a.email)
+    .filter((e): e is string => typeof e === "string");
+
+  const booking = await createPendingBooking({
+    iCalUID: event.iCalUID,
+    googleEventId: event.id,
+    userId: new ObjectId(user._id),
+    meeting: {
+      title: event.summary || "(sans titre)",
+      startsAt,
+      endsAt,
+      attendees,
+    },
+  });
+
+  await audit({
+    action: "booking_created_pending",
+    userId: user._id,
+    iCalUID: event.iCalUID,
+    details: {
+      bookingId: booking._id.toString(),
+      title: booking.meeting.title,
+      startsAt: startsAt.toISOString(),
+    },
+  });
+
+  void processBookingForEvent({
+    iCalUID: event.iCalUID,
+    googleEventId: event.id,
+    userId: new ObjectId(user._id),
+    meeting: booking.meeting,
+  }).catch((err) => {
+    audit({
+      action: "error",
       userId: user._id,
       iCalUID: event.iCalUID,
-      details: {
-        bookingId: booking._id.toString(),
-        title: booking.meeting.title,
-        startsAt: startsAt.toISOString(),
-      },
+      details: { where: "processBookingForEvent", message: String(err) },
     });
-
-    void processBookingForEvent({
-      iCalUID: event.iCalUID,
-      googleEventId: event.id!,
-      userId: new ObjectId(user._id),
-      meeting: booking.meeting,
-    }).catch((err) => {
-      audit({
-        action: "error",
-        userId: user._id,
-        iCalUID: event.iCalUID,
-        details: { where: "processBookingForEvent", message: String(err) },
-      });
-    });
-  }
+  });
 }
