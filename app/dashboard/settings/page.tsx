@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/session";
-import { findUserById, DEFAULT_BOOKING_RULES, DEFAULT_ROOM_PRIORITY } from "@/lib/users";
+import { findUserById, DEFAULT_BOOKING_RULES, DEFAULT_ROOM_PRIORITY, DEFAULT_NOTIF_PREFS } from "@/lib/users";
 import { SettingsView } from "./_components/SettingsView";
 
 interface PageProps {
@@ -31,6 +31,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       rules={user.bookingRules ?? DEFAULT_BOOKING_RULES}
       priority={user.roomPriority ?? DEFAULT_ROOM_PRIORITY}
       roomLocationMode={user.roomLocationMode ?? "location"}
+      notifPrefs={user.notifPrefs ?? DEFAULT_NOTIF_PREFS}
       watchActive={watchActive}
       watchExpiryISO={watchExpiryISO}
       initialSection={section || "connections"}

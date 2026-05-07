@@ -15,6 +15,27 @@ export interface DecryptedTokens {
 }
 
 /**
+ * Per-notification-type, per-channel preferences. Adding a new channel (Slack,
+ * push) = add a key to ChannelPrefs. Adding a new type = add a key to NotifPrefs.
+ */
+export type NotifType = "booking_success" | "booking_failure" | "watch_resync";
+export interface ChannelPrefs {
+  sms: boolean;
+  email: boolean;
+}
+export interface NotifPrefs {
+  booking_success: ChannelPrefs;
+  booking_failure: ChannelPrefs;
+  watch_resync: ChannelPrefs;
+}
+export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
+  // Conservative defaults — see product spec.
+  booking_success: { sms: false, email: true }, // not urgent, traceable, includes magic cancel link
+  booking_failure: { sms: true, email: true },  // critical: action required
+  watch_resync: { sms: false, email: false },   // technical, no action needed
+};
+
+/**
  * Trigger rules — each one is independent. The booking is triggered
  * if AT LEAST ONE enabled rule matches the meeting (OR logic).
  * Hardcoded prerequisites (organizer, not recurring, not cancelled,
@@ -48,6 +69,7 @@ export interface UserDoc {
   slackUserId: string | null;
   notifChannels: ("sms" | "email")[];
   bookingRules?: BookingRules; // optional for backwards-compat with existing users — fall back to DEFAULT
+  notifPrefs?: NotifPrefs; // optional for backwards-compat — fall back to DEFAULT_NOTIF_PREFS
   roomPriority?: ("Venus" | "Mars" | "Mercury" | "Earth" | "Jupiter")[]; // optional, fall back to DEFAULT_ROOM_PRIORITY
   /**
    * Where to write the room name in the Google Calendar event after a successful booking:
@@ -146,6 +168,14 @@ export async function setRoomPriority(
   await col.updateOne(
     { _id: userId },
     { $set: { roomPriority: priority, updatedAt: new Date() } },
+  );
+}
+
+export async function setNotifPrefs(userId: ObjectId, prefs: NotifPrefs): Promise<void> {
+  const col = await usersCol();
+  await col.updateOne(
+    { _id: userId },
+    { $set: { notifPrefs: prefs, updatedAt: new Date() } },
   );
 }
 

@@ -4,9 +4,9 @@ import { useState, useEffect, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
-import type { BookingRules } from "@/lib/users";
+import type { BookingRules, NotifPrefs } from "@/lib/users";
 import type { RoomName } from "@/lib/bookings";
-import { activateWatchAction, deactivateWatchAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction } from "../../actions";
+import { activateWatchAction, deactivateWatchAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction } from "../../actions";
 import { PriorityDnD } from "./PriorityDnD";
 import { PhoneEditor } from "./PhoneEditor";
 
@@ -21,6 +21,7 @@ interface Props {
   rules: BookingRules;
   priority: RoomName[];
   roomLocationMode: "location" | "description" | "none";
+  notifPrefs: NotifPrefs;
   watchActive: boolean;
   watchExpiryISO: string | null;
   initialSection: string;
@@ -35,7 +36,7 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
-export function SettingsView({ user, rules, priority, roomLocationMode, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, roomLocationMode, notifPrefs, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
   const searchParams = useSearchParams();
@@ -88,7 +89,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, watchAct
         <div className="settings-content">
           {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} watchExpiryISO={watchExpiryISO} />}
           {active === "rules" && <RulesSection rules={rules} priority={priority} />}
-          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} />}
+          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} notifPrefs={notifPrefs} />}
           {active === "account" && <AccountSection user={user} />}
         </div>
       </div>
@@ -365,14 +366,18 @@ function NotifsSection({
   telephone,
   email,
   mode,
+  notifPrefs,
 }: {
   telephone: string;
   email: string;
   mode: "location" | "description" | "none";
+  notifPrefs: NotifPrefs;
 }) {
   const [current, setCurrent] = useState<"location" | "description" | "none">(mode);
+  const [prefs, setPrefs] = useState<NotifPrefs>(notifPrefs);
   const [, startTransition] = useTransition();
   const [savedHint, setSavedHint] = useState(false);
+  const [prefsSavedHint, setPrefsSavedHint] = useState(false);
 
   const handleChange = (next: "location" | "description" | "none") => {
     setCurrent(next);
@@ -385,20 +390,77 @@ function NotifsSection({
     });
   };
 
+  const updatePref = (
+    type: keyof NotifPrefs,
+    channel: "sms" | "email",
+    value: boolean,
+  ) => {
+    const next: NotifPrefs = {
+      ...prefs,
+      [type]: { ...prefs[type], [channel]: value },
+    };
+    setPrefs(next);
+    const fd = new FormData();
+    (Object.keys(next) as Array<keyof NotifPrefs>).forEach((t) => {
+      if (next[t].sms) fd.set(`${t}_sms`, "on");
+      if (next[t].email) fd.set(`${t}_email`, "on");
+    });
+    startTransition(async () => {
+      await saveNotifPrefsAction(fd);
+      setPrefsSavedHint(true);
+      setTimeout(() => setPrefsSavedHint(false), 1500);
+    });
+  };
+
+  const failureBothOff = !prefs.booking_failure.sms && !prefs.booking_failure.email;
+
   return (
     <section>
       <h2 className="settings-h">Notifications</h2>
-      <p className="settings-sub">Comment on te prévient quand quelque chose mérite ton attention.</p>
+      <p className="settings-sub">
+        Pour chaque type d'événement, choisis sur quel canal tu veux être prévenu.
+      </p>
 
-      <h3 className="settings-h-sub">SMS · {telephone}</h3>
-      <ToggleRowDisplay enabled title="Conflit de salle détecté" desc="Quand deux meetings se disputent la même salle." />
-      <ToggleRowDisplay enabled title="Erreur de sync" desc="Token expiré, Skedda indisponible, etc." />
-      <ToggleRowDisplay enabled title="Confirmation de réservation" desc="Quand on a réussi à booker une salle pour toi." />
+      <div className="notif-recipients">
+        <span><Icon.phone size={11} /> SMS · <strong>{telephone || "—"}</strong></span>
+        <span><Icon.mail size={11} /> Email · <strong>{email}</strong></span>
+        {prefsSavedHint && (
+          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--success)" }}>
+            <Icon.check size={11} /> enregistré
+          </span>
+        )}
+      </div>
 
-      <div className="settings-divider" />
-
-      <h3 className="settings-h-sub">Email · {email}</h3>
-      <ToggleRowDisplay enabled title="Confirmation de réservation" desc="Avec un lien pour annuler en 1 clic." />
+      <div className="rule-list" style={{ gap: 12 }}>
+        <NotifTypeCard
+          title="Réservation confirmée"
+          desc="Quand une salle est bookée pour toi."
+          smsOn={prefs.booking_success.sms}
+          emailOn={prefs.booking_success.email}
+          onSms={(v) => updatePref("booking_success", "sms", v)}
+          onEmail={(v) => updatePref("booking_success", "email", v)}
+          hasPhone={!!telephone}
+        />
+        <NotifTypeCard
+          title="Conflit ou erreur"
+          desc="Deux meetings sur la même salle, sync cassée, token expiré."
+          smsOn={prefs.booking_failure.sms}
+          emailOn={prefs.booking_failure.email}
+          onSms={(v) => updatePref("booking_failure", "sms", v)}
+          onEmail={(v) => updatePref("booking_failure", "email", v)}
+          hasPhone={!!telephone}
+          warning={failureBothOff ? "Tu ne seras pas prévenu si une réservation échoue. Pense à vérifier dans le dashboard." : undefined}
+        />
+        <NotifTypeCard
+          title="Re-sync automatique"
+          desc="Quand on remet ton calendrier d'aplomb tout seul."
+          smsOn={prefs.watch_resync.sms}
+          emailOn={prefs.watch_resync.email}
+          onSms={(v) => updatePref("watch_resync", "sms", v)}
+          onEmail={(v) => updatePref("watch_resync", "email", v)}
+          hasPhone={!!telephone}
+        />
+      </div>
 
       <div className="settings-divider" />
 
@@ -441,6 +503,104 @@ function NotifsSection({
   );
 }
 
+function NotifTypeCard({
+  title,
+  desc,
+  smsOn,
+  emailOn,
+  onSms,
+  onEmail,
+  hasPhone,
+  warning,
+}: {
+  title: string;
+  desc: string;
+  smsOn: boolean;
+  emailOn: boolean;
+  onSms: (v: boolean) => void;
+  onEmail: (v: boolean) => void;
+  hasPhone: boolean;
+  warning?: string;
+}) {
+  return (
+    <div
+      className="rule-row"
+      data-active={smsOn || emailOn}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        gap: 12,
+        padding: "14px 16px",
+      }}
+    >
+      <div>
+        <div className="toggle-row-title">{title}</div>
+        <div className="toggle-row-desc">{desc}</div>
+      </div>
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+        <ChannelToggle
+          label="SMS"
+          on={smsOn}
+          onChange={onSms}
+          disabled={!hasPhone}
+          disabledHint="Ajoute un numéro dans Mon compte"
+        />
+        <ChannelToggle
+          label="Email"
+          on={emailOn}
+          onChange={onEmail}
+        />
+      </div>
+      {warning && (
+        <div className="notif-warning">
+          <Icon.alert size={12} /> {warning}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChannelToggle({
+  label,
+  on,
+  onChange,
+  disabled,
+  disabledHint,
+}: {
+  label: string;
+  on: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  disabledHint?: string;
+}) {
+  return (
+    <label
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+      title={disabled ? disabledHint : undefined}
+    >
+      <button
+        className="rule-toggle"
+        data-active={on && !disabled}
+        onClick={() => !disabled && onChange(!on)}
+        aria-pressed={on}
+        aria-label={`${label} ${on ? "activé" : "désactivé"}`}
+        type="button"
+        disabled={disabled}
+      >
+        <span className="rule-toggle-dot" />
+      </button>
+      <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
+    </label>
+  );
+}
+
 function RadioRow({
   name,
   value,
@@ -474,27 +634,6 @@ function RadioRow({
         <div className="toggle-row-desc">{desc}</div>
       </div>
     </label>
-  );
-}
-
-function ToggleRowDisplay({ enabled, title, desc }: { enabled: boolean; title: string; desc: string }) {
-  return (
-    <div className="toggle-row">
-      <div style={{ flex: 1 }}>
-        <div className="toggle-row-title">{title}</div>
-        <div className="toggle-row-desc">{desc}</div>
-      </div>
-      <button
-        className="rule-toggle"
-        data-active={enabled}
-        aria-pressed={enabled}
-        type="button"
-        disabled
-        style={{ opacity: 0.7 }}
-      >
-        <span className="rule-toggle-dot" />
-      </button>
-    </div>
   );
 }
 

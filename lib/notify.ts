@@ -4,6 +4,7 @@
  */
 
 import { audit } from "./audit";
+import { DEFAULT_NOTIF_PREFS, type NotifType, type NotifPrefs } from "./users";
 import type { ObjectId } from "mongodb";
 
 interface SmsArgs {
@@ -95,7 +96,8 @@ export async function sendEmail(args: EmailArgs): Promise<{ success: boolean; er
 }
 
 /**
- * Envoie une notif au sales sur tous ses canaux configurés. Audit chaque résultat.
+ * Sends a notification of a given type via the channel(s) the user has enabled
+ * for that type. Audits each delivery attempt.
  */
 export async function notifyUser(args: {
   user: {
@@ -103,25 +105,27 @@ export async function notifyUser(args: {
     email: string;
     firstName: string;
     telephone: string | null;
-    notifChannels: ("sms" | "email")[];
+    notifPrefs?: NotifPrefs;
   };
+  type: NotifType;
   iCalUID?: string;
   smsText: string;
   emailSubject: string;
   emailHtml: string;
 }): Promise<void> {
-  const { user, smsText, emailSubject, emailHtml, iCalUID } = args;
+  const { user, type, smsText, emailSubject, emailHtml, iCalUID } = args;
+  const prefs = (user.notifPrefs ?? DEFAULT_NOTIF_PREFS)[type];
 
-  if (user.notifChannels.includes("sms") && user.telephone) {
+  if (prefs.sms && user.telephone) {
     const r = await sendSms({ phoneNumber: user.telephone, text: smsText });
     await audit({
       action: r.success ? "notify_sent" : "error",
       userId: user._id ?? null,
       iCalUID: iCalUID ?? null,
-      details: { channel: "sms", to: user.telephone, success: r.success, error: r.error },
+      details: { channel: "sms", type, to: user.telephone, success: r.success, error: r.error },
     });
   }
-  if (user.notifChannels.includes("email")) {
+  if (prefs.email) {
     const r = await sendEmail({
       to: { email: user.email, name: user.firstName },
       subject: emailSubject,
@@ -131,7 +135,7 @@ export async function notifyUser(args: {
       action: r.success ? "notify_sent" : "error",
       userId: user._id ?? null,
       iCalUID: iCalUID ?? null,
-      details: { channel: "email", to: user.email, success: r.success, error: r.error },
+      details: { channel: "email", type, to: user.email, success: r.success, error: r.error },
     });
   }
 }

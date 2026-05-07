@@ -6,7 +6,15 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/session";
 import { activateWatchForUser, deactivateWatchForUser } from "@/lib/watch";
 import { releaseBookingByIdAsUser } from "@/lib/release-booking";
-import { setBookingRules, setRoomLocationMode, setRoomPriority, setTelephone, type BookingRules } from "@/lib/users";
+import {
+  setBookingRules,
+  setNotifPrefs,
+  setRoomLocationMode,
+  setRoomPriority,
+  setTelephone,
+  type BookingRules,
+  type NotifPrefs,
+} from "@/lib/users";
 
 const VALID_ROOMS = ["Venus", "Mars", "Mercury", "Earth", "Jupiter"] as const;
 type RoomKey = typeof VALID_ROOMS[number];
@@ -31,6 +39,27 @@ export async function updatePhoneAction(formData: FormData): Promise<UpdatePhone
   await setTelephone(userId, normalized);
   revalidatePath("/dashboard/settings");
   return { ok: true, phone: normalized };
+}
+
+export async function saveNotifPrefsAction(formData: FormData): Promise<{ ok: boolean }> {
+  const { userId } = await requireUser();
+  const prefs: NotifPrefs = {
+    booking_success: {
+      sms: formData.get("booking_success_sms") === "on",
+      email: formData.get("booking_success_email") === "on",
+    },
+    booking_failure: {
+      sms: formData.get("booking_failure_sms") === "on",
+      email: formData.get("booking_failure_email") === "on",
+    },
+    watch_resync: {
+      sms: formData.get("watch_resync_sms") === "on",
+      email: formData.get("watch_resync_email") === "on",
+    },
+  };
+  await setNotifPrefs(userId, prefs);
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 export async function saveRoomLocationModeAction(formData: FormData): Promise<{ ok: boolean }> {
