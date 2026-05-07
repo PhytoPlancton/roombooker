@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { ROOMS, roomById } from "@/lib/ui/rooms";
 import { durationLabel } from "@/lib/ui/format";
@@ -18,6 +19,7 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ user, events, watchActive, flashError, flashSuccess }: DashboardShellProps) {
+  const router = useRouter();
   const [filterRoom, setFilterRoom] = useState<"all" | RoomName>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "issues">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -30,6 +32,31 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
     const id = setTimeout(() => setToast(null), 2400);
     return () => clearTimeout(id);
   }, [toast]);
+
+  // Live refresh: refetch the server data every 8s while the tab is visible.
+  // Faster cadence (3s) when there's at least one pending/syncing booking that
+  // is expected to flip soon. router.refresh() preserves all client state
+  // (drawer, filters, selection) — it just re-runs the page server component.
+  const hasPending = events.some((e) => e.status === "syncing");
+  useEffect(() => {
+    const interval = hasPending ? 3000 : 8000;
+    const tick = () => {
+      if (typeof document !== "undefined" && !document.hidden) router.refresh();
+    };
+    const onVisible = () => {
+      if (typeof document !== "undefined" && !document.hidden) router.refresh();
+    };
+    const id = setInterval(tick, interval);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisible);
+    }
+    return () => {
+      clearInterval(id);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisible);
+      }
+    };
+  }, [router, hasPending]);
 
   const showToast = (text: string) => setToast(text);
 
