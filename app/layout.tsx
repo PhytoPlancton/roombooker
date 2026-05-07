@@ -7,9 +7,26 @@ const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], 
 const instrumentSerif = Instrument_Serif({ subsets: ["latin"], weight: ["400"], style: ["normal", "italic"], variable: "--font-instrument" });
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-jetbrains" });
 
+const SITE_URL = "https://roombooker.nmt.ovh";
+const PITCH = "Une salle physique réservée à chaque meeting Google Calendar. Plus jamais de double saisie entre Google Cal et Skedda — tu poses ton meeting, on s'occupe de la salle.";
+
 export const metadata: Metadata = {
-  title: "Roombooker — Sync Google Calendar ↔ Skedda",
-  description: "Réservez automatiquement une salle physique quand vous créez un meeting Google Calendar.",
+  metadataBase: new URL(SITE_URL),
+  title: "Roombooker — Une salle, à chaque meeting Google Cal.",
+  description: PITCH,
+  openGraph: {
+    title: "Roombooker — Une salle, à chaque meeting Google Cal.",
+    description: PITCH,
+    url: SITE_URL,
+    siteName: "Roombooker",
+    locale: "fr_FR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Roombooker — Une salle, à chaque meeting Google Cal.",
+    description: PITCH,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
