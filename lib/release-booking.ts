@@ -76,3 +76,11 @@ export async function releaseBookingByICalUIDAuto(iCalUID: string): Promise<Rele
   if (!booking) return { ok: false, reason: "not_found" };
   return doRelease(booking, "calendar_cancel");
 }
+
+/** Magic-link cancel: token already authenticated upstream (HMAC), no user check. */
+export async function releaseBookingByIdMagic(bookingId: ObjectId): Promise<ReleaseResult & { booking?: BookingDoc }> {
+  const booking = await findBookingById(bookingId);
+  if (!booking) return { ok: false, reason: "not_found" };
+  const result = await doRelease(booking, "dashboard");
+  return { ...result, booking };
+}

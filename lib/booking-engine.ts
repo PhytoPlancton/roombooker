@@ -1,11 +1,12 @@
 import { ObjectId } from "mongodb";
 import { differenceInDays } from "date-fns";
-import { ROOM_PRIORITY, type RoomName, markBookingResult } from "./bookings";
+import { ROOM_PRIORITY, type RoomName, markBookingResult, findBookingByICalUID } from "./bookings";
 import { ROOM_SPACE_IDS, bookSkeddaHttp, type BookSkeddaResult } from "./skedda-http";
 import { notifyUser } from "./notify";
 import { updateEventLocation } from "./calendar";
 import { findUserById, type UserDoc } from "./users";
 import { audit } from "./audit";
+import { signCancelToken } from "./magic-link";
 
 const MAX_DAYS_AHEAD = 10;
 
@@ -146,7 +147,10 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
           details: { where: "updateEventLocation", message: String(err) },
         });
       });
-      await notifySuccess(user, args, room.name);
+      const persisted = await findBookingByICalUID(args.iCalUID);
+      if (persisted) {
+        await notifySuccess(user, args, room.name, persisted._id);
+      }
       await audit({
         action: "booking_engine_finished",
         userId: args.userId,
@@ -205,7 +209,12 @@ function errorReasonText(reason: string, lastRoom: RoomName | null): string {
   }
 }
 
-async function notifySuccess(user: UserDoc, args: ProcessBookingArgs, room: RoomName) {
+async function notifySuccess(
+  user: UserDoc,
+  args: ProcessBookingArgs,
+  room: RoomName,
+  bookingDocId: ObjectId,
+) {
   const time = args.meeting.startsAt.toLocaleString("fr-FR", {
     weekday: "short",
     day: "2-digit",
@@ -213,6 +222,9 @@ async function notifySuccess(user: UserDoc, args: ProcessBookingArgs, room: Room
     hour: "2-digit",
     minute: "2-digit",
   });
+  const base = (process.env.PUBLIC_APP_URL || "https://roombooker.nmt.ovh").replace(/\/$/, "");
+  const cancelUrl = `${base}/c/${signCancelToken(bookingDocId.toString())}`;
+
   await notifyUser({
     user: {
       _id: user._id,
@@ -222,13 +234,14 @@ async function notifySuccess(user: UserDoc, args: ProcessBookingArgs, room: Room
       notifChannels: user.notifChannels,
     },
     iCalUID: args.iCalUID,
-    smsText: `RoomBooker: salle ${room} reservée pour "${args.meeting.title}" - ${time}`,
-    emailSubject: `Salle ${room} réservée pour ${args.meeting.title}`,
+    smsText: `RoomBooker: salle ${room} reservee pour ${time}. Annuler: ${cancelUrl}`,
+    emailSubject: `Salle ${room} réservée — ${time}`,
     emailHtml: `
       <p>Bonjour ${user.firstName},</p>
-      <p>La salle <strong>${room}</strong> est réservée pour ton meeting :</p>
-      <p>📅 ${args.meeting.title}<br/>🕐 ${time}</p>
+      <p>La salle <strong>${room}</strong> est réservée :</p>
+      <p>🕐 ${time}</p>
       <p>L'event Google Calendar a été mis à jour avec la salle.</p>
+      <p><a href="${cancelUrl}">Annuler la réservation</a></p>
     `,
   });
 }

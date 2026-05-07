@@ -111,6 +111,11 @@ export async function markBookingResult(args: {
   await col.updateOne({ iCalUID: args.iCalUID }, { $set: update });
 }
 
+export async function deleteBookingByICalUID(iCalUID: string): Promise<void> {
+  const col = await bookingsCol();
+  await col.deleteOne({ iCalUID });
+}
+
 export async function listBookingsForUser(userId: ObjectId, limit = 50): Promise<BookingDoc[]> {
   const col = await bookingsCol();
   return col

@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 import { syncSince } from "@/lib/calendar";
 import { findUserByWatchChannelId, updateWatchSyncToken, type UserDoc } from "@/lib/users";
 import { shouldBookRoom } from "@/lib/booking-rules";
-import { createPendingBooking, findBookingByICalUID } from "@/lib/bookings";
+import { createPendingBooking, findBookingByICalUID, deleteBookingByICalUID } from "@/lib/bookings";
 import { activateWatchForUser } from "@/lib/watch";
 import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
@@ -147,15 +147,63 @@ async function processChange(user: UserDoc): Promise<void> {
       },
     });
 
+    const existing = await findBookingByICalUID(event.iCalUID);
+
+    // Existing booking + already booked on Skedda — handle reschedule / conditions broken.
+    if (existing && existing.status === "booked") {
+      const newStartMs = event.start?.dateTime ? new Date(event.start.dateTime).getTime() : null;
+      const oldStartMs = existing.meeting.startsAt.getTime();
+      const dateChanged = newStartMs !== null && newStartMs !== oldStartMs;
+
+      if (dateChanged) {
+        // Meeting moved → release old, then fall through to re-book at the new date.
+        await releaseBookingByICalUIDAuto(event.iCalUID);
+        await deleteBookingByICalUID(event.iCalUID);
+        await audit({
+          action: "event_evaluated",
+          userId: user._id,
+          iCalUID: event.iCalUID,
+          details: {
+            decision: "reschedule",
+            oldStart: existing.meeting.startsAt.toISOString(),
+            newStart: new Date(newStartMs!).toISOString(),
+          },
+        });
+        // fall through to the create-booking flow below
+      } else if (
+        !decision.shouldBook &&
+        (decision.reason === "no_external_attendee" || decision.reason === "location_already_set")
+      ) {
+        // Same date but conditions broke (last external attendee removed,
+        // or sales filled location manually) → release the room.
+        await releaseBookingByICalUIDAuto(event.iCalUID);
+        await audit({
+          action: "event_evaluated",
+          userId: user._id,
+          iCalUID: event.iCalUID,
+          details: { decision: "release", reason: decision.reason },
+        });
+        continue;
+      } else {
+        // Same date, still bookable → nothing to do (already booked).
+        await audit({
+          action: "event_evaluated",
+          userId: user._id,
+          iCalUID: event.iCalUID,
+          details: { skip: "already_booked", existingStatus: existing.status },
+        });
+        continue;
+      }
+    }
+
     if (!decision.shouldBook) continue;
 
-    const existing = await findBookingByICalUID(event.iCalUID);
-    if (existing) {
+    if (existing && existing.status !== "booked") {
       await audit({
         action: "event_evaluated",
         userId: user._id,
         iCalUID: event.iCalUID,
-        details: { skip: "already_booked", existingStatus: existing.status },
+        details: { skip: "already_in_db", existingStatus: existing.status },
       });
       continue;
     }
