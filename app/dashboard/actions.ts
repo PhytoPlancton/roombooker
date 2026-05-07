@@ -74,8 +74,8 @@ export async function saveRulesAction(formData: FormData): Promise<void> {
     },
   };
   await setBookingRules(userId, rules);
-  revalidatePath("/dashboard");
-  redirect("/dashboard?success=rules_saved");
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings?section=rules&success=rules_saved");
 }
 
 export async function deactivateWatchAction(): Promise<void> {

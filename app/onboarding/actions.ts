@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { setTelephone } from "@/lib/users";
 
@@ -11,18 +10,20 @@ function normalizeTelephone(raw: string): string | null {
   return null;
 }
 
-export async function saveTelephone(formData: FormData) {
+export type SaveTelephoneResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function saveTelephone(formData: FormData): Promise<SaveTelephoneResult> {
   const { userId } = await requireUser();
   const raw = formData.get("telephone");
   if (typeof raw !== "string") {
-    redirect("/onboarding?error=Numéro%20manquant");
+    return { ok: false, error: "Numéro manquant" };
   }
-
   const normalized = normalizeTelephone(raw);
   if (!normalized) {
-    redirect("/onboarding?error=Format%20invalide%20(ex%20%3A%2006%2012%2034%2056%2078)");
+    return { ok: false, error: "Format invalide (ex : 06 12 34 56 78)" };
   }
-
   await setTelephone(userId, normalized);
-  redirect("/dashboard");
+  return { ok: true };
 }
