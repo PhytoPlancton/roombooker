@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { PlanetIcon } from "@/components/ui/PlanetIcon";
 import { ROOMS } from "@/lib/ui/rooms";
 import type { RoomName } from "@/lib/bookings";
 
@@ -76,7 +77,11 @@ export function PriorityDnD({ initialOrder, onChange }: Props) {
                 className="priority-pill"
                 data-dragging={isDragging}
                 data-just-dropped={justDroppedId === id}
-                style={isOver ? { outline: "2px dashed var(--brand)", outlineOffset: "2px" } : undefined}
+                style={{
+                  padding: "8px 18px 8px 12px",
+                  gap: 12,
+                  ...(isOver ? { outline: "2px dashed var(--brand)", outlineOffset: "2px" } : {}),
+                }}
                 onDragStart={(e) => {
                   setDraggingId(id);
                   e.dataTransfer.effectAllowed = "move";
@@ -109,10 +114,8 @@ export function PriorityDnD({ initialOrder, onChange }: Props) {
                 }}
               >
                 <span className="priority-grip" aria-hidden>⋮⋮</span>
-                <span className="room-icon" style={{ background: room.color, width: 16, height: 16 }}>
-                  {room.name[0]}
-                </span>
-                <span>{room.name}</span>
+                <PlanetIcon planet={id} size={20} />
+                <span style={{ fontSize: 14, fontWeight: 500 }}>{room.name}</span>
               </button>
               {idx < order.length - 1 && (
                 <span className="priority-arrow" aria-hidden>

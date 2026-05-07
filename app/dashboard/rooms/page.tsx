@@ -56,9 +56,18 @@ export default async function RoomsPage() {
               </header>
 
               <div className="room-card-status">
-                <span className={`status-pill ${myBookings.length > 0 ? "occupied" : "free"}`}>
+                <span
+                  className={`status-pill ${myBookings.length > 0 ? "free" : ""}`}
+                  style={
+                    myBookings.length === 0
+                      ? { background: "var(--bg-soft)", color: "var(--ink-3)", border: "1px solid var(--line)" }
+                      : undefined
+                  }
+                >
                   <span className="status-pill-dot" />
-                  {myBookings.length > 0 ? `${myBookings.length} de tes meetings` : "Aucun de tes meetings"}
+                  {myBookings.length > 0
+                    ? `${myBookings.length} de tes meeting${myBookings.length > 1 ? "s" : ""}`
+                    : "Aucun de tes meetings"}
                 </span>
               </div>
 

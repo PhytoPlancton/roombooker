@@ -103,7 +103,7 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
 
         <KpiRow
           counts={counts}
-          total={events.length}
+          events={events}
           activeIssueFilter={filterStatus === "issues"}
           onToggleIssueFilter={() => setFilterStatus((s) => (s === "issues" ? "all" : "issues"))}
         />
@@ -212,17 +212,26 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
 
 function KpiRow({
   counts,
-  total,
+  events,
   activeIssueFilter,
   onToggleIssueFilter,
 }: {
   counts: { synced: number; syncing: number; conflict: number; error: number };
-  total: number;
+  events: EventVM[];
   activeIssueFilter: boolean;
   onToggleIssueFilter: () => void;
 }) {
-  const timeSaved = Math.round(total * 1.4);
   const issuesCount = counts.conflict + counts.error;
+  // Real metric: bookings actually synced this calendar month
+  const now = new Date();
+  const m = now.getMonth();
+  const y = now.getFullYear();
+  const syncedThisMonth = events.filter((e) => {
+    if (e.status !== "synced") return false;
+    const d = new Date(e.startISO);
+    return d.getMonth() === m && d.getFullYear() === y;
+  }).length;
+  const upcoming = events.filter((e) => e.status === "synced" && new Date(e.startISO) > now).length;
   return (
     <div className="kpi-row kpi-row-2">
       <button
@@ -259,13 +268,10 @@ function KpiRow({
       </button>
       <div className="kpi">
         <Spark color="var(--brand)" pattern="up" />
-        <span className="kpi-label">Temps que tu as gagné</span>
-        <span className="kpi-value">
-          {timeSaved}
-          <span style={{ fontSize: 18, color: "var(--ink-3)", marginLeft: 4, fontWeight: 500 }}>min</span>
-        </span>
+        <span className="kpi-label">Salles réservées · auto</span>
+        <span className="kpi-value">{syncedThisMonth}</span>
         <span className="kpi-meta">
-          au total · <strong>~{Math.round((timeSaved * 22) / 60)} h</strong> ce mois-ci
+          ce mois-ci · <strong>{upcoming}</strong> à venir
         </span>
       </div>
     </div>
