@@ -8,7 +8,7 @@ import { durationLabel, shortDayLabel } from "@/lib/ui/format";
 import type { EventVM } from "@/lib/ui/serialize";
 import type { RoomName } from "@/lib/bookings";
 import { EventDrawer } from "./EventDrawer";
-import { activateWatchAction, cancelBookingAction } from "../actions";
+import { activateWatchAction, cancelBookingAction, deactivateWatchAction } from "../actions";
 
 interface DashboardShellProps {
   user: { name: string; email: string; firstName: string };
@@ -87,14 +87,6 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
 
   const selectedEvent = events.find((e) => e.id === selectedId) || null;
 
-  const handleResync = async () => {
-    if (!watchActive) {
-      showToast("Active d'abord la surveillance dans Réglages");
-      return;
-    }
-    showToast("Synchronisation en cours…");
-  };
-
   return (
     <>
       <div className="page">
@@ -111,17 +103,17 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {watchActive ? (
-              <button className="btn" onClick={handleResync} type="button">
-                <Icon.refresh size={14} /> Re-synchroniser
+            <form action={watchActive ? deactivateWatchAction : activateWatchAction}>
+              <button
+                type="submit"
+                className="sync-toggle"
+                data-active={watchActive}
+                title={watchActive ? "Cliquer pour mettre la synchro en pause" : "Cliquer pour réactiver la synchro"}
+              >
+                <span className="sync-toggle-dot" />
+                {watchActive ? "Sync active" : "Sync en pause"}
               </button>
-            ) : (
-              <form action={activateWatchAction}>
-                <button className="btn btn-primary" type="submit">
-                  <Icon.refresh size={14} /> Activer la synchro
-                </button>
-              </form>
-            )}
+            </form>
             <a className="btn btn-primary" href="https://antlerfrance.skedda.com/booking" target="_blank" rel="noopener noreferrer">
               <Icon.link size={14} /> Ouvrir Skedda
             </a>

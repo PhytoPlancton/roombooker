@@ -108,6 +108,54 @@
   pointer-events: none;
 }
 
+/* Sync toggle pill in the dashboard page header.
+   - Active: green dot with gentle pulse, says "Sync active"
+   - Paused: amber dot, says "Sync en pause"
+   Click toggles activate/deactivate watch. */
+.sync-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border 0.12s, background 0.12s;
+}
+.sync-toggle:hover { border-color: var(--line-2); }
+.sync-toggle .sync-toggle-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  transition: background 0.18s, box-shadow 0.18s;
+}
+.sync-toggle[data-active="true"] .sync-toggle-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+  animation: sync-toggle-pulse 2.4s ease-in-out infinite;
+}
+.sync-toggle[data-active="false"] {
+  background: var(--warning-soft);
+  border-color: var(--warning-soft);
+  color: var(--warning);
+}
+.sync-toggle[data-active="false"] .sync-toggle-dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning-soft);
+}
+@keyframes sync-toggle-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--success-soft); }
+  50%      { box-shadow: 0 0 0 6px var(--success-soft); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-toggle[data-active="true"] .sync-toggle-dot { animation: none; }
+}
+
 /* Inline edit (phone in account section) */
 .inline-edit {
   display: inline-flex;
