@@ -1,7 +1,7 @@
 # RoomBooker — Roadmap
 
 **Dernière update** : 2026-05-07
-**Version prod** : v0.4.1
+**Version prod** : v0.5.0
 **Stack** : Next.js 16 / TypeScript / MongoDB (cluster partagé EDJ Labs) / fetch HTTP-only Skedda
 
 ---
@@ -62,12 +62,12 @@
 
 ## 🛠 Backlog priorisé
 
-### Priorité 1 — Robustesse opérationnelle (essentiel)
+### Priorité 1 — Robustesse opérationnelle ✅ (v0.5.0)
 
-- [ ] **Notif au sales quand resync Google déclenchée** — si `syncToken` expire ou watch channel re-créé, envoyer SMS+email au sales pour qu'il sache qu'on a re-init la surveillance (ne devrait pas l'inquiéter mais transparence). Dans `lib/watch.ts > activateWatchForUser`, après le 1er onboarding, audit + notif.
-- [ ] **Cron renouvellement watches Google** — les watches Calendar expirent à 7 jours. `setInterval` au boot du container : toutes les 24h, query `findUsersWithExpiringWatch` (helper déjà écrit), re-activate.
-- [ ] **Cron rattrapage pending bookings > 10j** — `setInterval` 6h : query bookings `status: pending` dont `meeting.startsAt - now < 10j`, re-trigger `processBookingForEvent`. Le booking passera de `pending` → `booked` ou `failed` au moment où Skedda l'accepte.
-- [ ] **Notif "deferred" à la création** — quand un meeting est créé > 10j, envoyer un SMS au sales : *"Meeting du XX trop loin pour Skedda, je le réserverai automatiquement le YY (10j avant)"*. Sinon le sales peut s'inquiéter de ne rien recevoir.
+- [x] **Notif au sales quand resync Google déclenchée** — `activateWatchForUser` accepte un param `source`, notif SMS+email auto si source ∈ {`calendar_resync`, `cron_renewal`}.
+- [x] **Cron renouvellement watches Google** — `setInterval` 24h via `instrumentation.ts` → `lib/cron.ts`. Trouve les users dont watch expire < 48h, re-active.
+- [x] **Cron rattrapage pending bookings > 10j** — `setInterval` 6h. Query les `status: pending` dont la date passe sous 10j, re-trigger `processBookingForEvent`.
+- [x] **Notif "deferred" à la création** — SMS+email envoyé directement quand meeting > 10j est détecté, mentionne la date à laquelle le booking auto sera tenté.
 
 ### Priorité 2 — Edge cases sales
 
