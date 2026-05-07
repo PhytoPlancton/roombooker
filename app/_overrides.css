@@ -1,0 +1,133 @@
+/* Roombooker — overrides on top of the design bundle */
+
+/* Page subtitle baseline alignment (the .me-pill rendered too high vs surrounding text). */
+.page-subtitle .me-pill {
+  vertical-align: -2px;
+}
+
+/* Filter chips: keep on one row when there is room, scroll horizontally otherwise. */
+.card-header .chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.card-header .chips::-webkit-scrollbar { display: none; }
+.card-header .chips .chip {
+  flex-shrink: 0;
+}
+
+/* Animate the status-pill dot with the same gentle pulse used in the topnav.
+   Keep amplitude conservative (3px → 4px) to avoid distraction; opt-out for
+   users with reduced-motion preferences. */
+.status-pill.free .status-pill-dot {
+  animation: status-pill-pulse 2.4s ease-in-out infinite;
+}
+@keyframes status-pill-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--success-soft); }
+  50%      { box-shadow: 0 0 0 4px var(--success-soft); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot,
+  .status-pill.free .status-pill-dot {
+    animation: none !important;
+  }
+}
+
+/* Drag & drop priority pills */
+.priority-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.priority-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  cursor: grab;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.12s, border-color 0.12s;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+.priority-pill:hover {
+  border-color: var(--line-2);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.priority-pill[data-dragging="true"] {
+  cursor: grabbing;
+  opacity: 0.55;
+  transform: scale(1.02);
+}
+.priority-pill[data-just-dropped="true"] {
+  animation: priority-pop 220ms ease-out;
+}
+@keyframes priority-pop {
+  0%   { transform: scale(1); }
+  60%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.priority-pill .priority-grip {
+  color: var(--ink-4);
+  opacity: 0.4;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.priority-pill:hover .priority-grip { opacity: 0.7; }
+.priority-arrow {
+  color: var(--ink-4);
+  display: inline-flex;
+  align-items: center;
+}
+.priority-hint {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin: 4px 0 14px;
+  line-height: 1.4;
+  transition: opacity 200ms, max-height 240ms ease-out, margin 200ms;
+  overflow: hidden;
+  max-height: 60px;
+}
+.priority-hint[data-hidden="true"] {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Inline edit (phone in account section) */
+.inline-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.inline-edit-pencil {
+  width: 22px; height: 22px;
+  display: inline-grid; place-items: center;
+  border-radius: 6px;
+  color: var(--ink-3);
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.12s, background 0.12s;
+}
+.inline-edit:hover .inline-edit-pencil { opacity: 1; background: var(--bg-soft); }
+.inline-edit-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--success);
+  font-size: 12px;
+  animation: inline-success 1500ms forwards;
+}
+@keyframes inline-success {
+  0%   { opacity: 0; transform: translateY(-2px); }
+  10%  { opacity: 1; transform: translateY(0); }
+  85%  { opacity: 1; }
+  100% { opacity: 0; }
+}

@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { ROOMS, roomById } from "@/lib/ui/rooms";
-import { durationLabel, dayLabel } from "@/lib/ui/format";
+import { durationLabel } from "@/lib/ui/format";
 import type { EventVM } from "@/lib/ui/serialize";
 import type { RoomName } from "@/lib/bookings";
 import { EventDrawer } from "./EventDrawer";
@@ -19,7 +19,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({ user, events, watchActive, flashError, flashSuccess }: DashboardShellProps) {
   const [filterRoom, setFilterRoom] = useState<"all" | RoomName>("all");
-  const [dayOffset, setDayOffset] = useState(0);
+  const [filterStatus, setFilterStatus] = useState<"all" | "issues">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
@@ -33,20 +33,13 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
 
   const showToast = (text: string) => setToast(text);
 
-  // Filter events by selected day (today + offset) — events have ISO dates
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const targetDay = new Date(today.getTime() + dayOffset * 86400000);
+  // Show every active booking, sorted by date ascending (closest first)
   const filtered = useMemo(() => {
     return events
-      .filter((e) => {
-        const d = new Date(e.startISO);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime() === targetDay.getTime();
-      })
       .filter((e) => filterRoom === "all" || e.room === filterRoom)
+      .filter((e) => filterStatus === "all" || e.status === "conflict" || e.status === "error")
       .sort((a, b) => (a.startISO > b.startISO ? 1 : -1));
-  }, [events, filterRoom, targetDay]);
+  }, [events, filterRoom, filterStatus]);
 
   const counts = useMemo(() => {
     const c = { synced: 0, syncing: 0, conflict: 0, error: 0 };
@@ -108,7 +101,12 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
           </div>
         </div>
 
-        <KpiRow counts={counts} total={events.length} />
+        <KpiRow
+          counts={counts}
+          total={events.length}
+          activeIssueFilter={filterStatus === "issues"}
+          onToggleIssueFilter={() => setFilterStatus((s) => (s === "issues" ? "all" : "issues"))}
+        />
 
         <div className="grid-main">
           <section className="card">
@@ -140,18 +138,6 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
                 ))}
               </div>
             </header>
-
-            <div className="events-toolbar">
-              <div className="day-nav">
-                <button onClick={() => setDayOffset((d) => d - 1)} type="button" aria-label="Jour précédent">
-                  <Icon.chevL />
-                </button>
-                <span className="day-label">{dayLabel(targetDay)}</span>
-                <button onClick={() => setDayOffset((d) => d + 1)} type="button" aria-label="Jour suivant">
-                  <Icon.chevR />
-                </button>
-              </div>
-            </div>
 
             <ul className="events">
               {filtered.map((e) => (
@@ -224,14 +210,43 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
   );
 }
 
-function KpiRow({ counts, total }: { counts: { synced: number; syncing: number; conflict: number; error: number }; total: number }) {
+function KpiRow({
+  counts,
+  total,
+  activeIssueFilter,
+  onToggleIssueFilter,
+}: {
+  counts: { synced: number; syncing: number; conflict: number; error: number };
+  total: number;
+  activeIssueFilter: boolean;
+  onToggleIssueFilter: () => void;
+}) {
   const timeSaved = Math.round(total * 1.4);
+  const issuesCount = counts.conflict + counts.error;
   return (
     <div className="kpi-row kpi-row-2">
-      <div className="kpi">
+      <button
+        type="button"
+        className="kpi"
+        onClick={issuesCount > 0 ? onToggleIssueFilter : undefined}
+        style={{
+          textAlign: "left",
+          cursor: issuesCount > 0 ? "pointer" : "default",
+          outline: activeIssueFilter ? "2px solid var(--warning)" : "none",
+          outlineOffset: "-2px",
+        }}
+        aria-pressed={activeIssueFilter}
+      >
         <Spark color="var(--warning)" pattern="dip" />
-        <span className="kpi-label">À regarder · sur tes meetings</span>
-        <span className="kpi-value">{counts.conflict + counts.error}</span>
+        <span className="kpi-label">
+          À regarder · sur tes meetings
+          {issuesCount > 0 && (
+            <span style={{ marginLeft: 6, fontSize: 11, color: "var(--ink-3)", textTransform: "none", letterSpacing: 0 }}>
+              {activeIssueFilter ? "(cliquer pour tout voir)" : "(cliquer pour filtrer)"}
+            </span>
+          )}
+        </span>
+        <span className="kpi-value">{issuesCount}</span>
         <span className="kpi-meta warn">
           {counts.conflict ? <strong>{counts.conflict} conflit{counts.conflict > 1 ? "s" : ""} de salle</strong> : "Aucun conflit ✓"}
           {counts.error ? (
@@ -241,7 +256,7 @@ function KpiRow({ counts, total }: { counts: { synced: number; syncing: number; 
             </>
           ) : null}
         </span>
-      </div>
+      </button>
       <div className="kpi">
         <Spark color="var(--brand)" pattern="up" />
         <span className="kpi-label">Temps que tu as gagné</span>

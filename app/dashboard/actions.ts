@@ -6,7 +6,43 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/session";
 import { activateWatchForUser, deactivateWatchForUser } from "@/lib/watch";
 import { releaseBookingByIdAsUser } from "@/lib/release-booking";
-import { setBookingRules, type BookingRules } from "@/lib/users";
+import { setBookingRules, setRoomPriority, setTelephone, type BookingRules } from "@/lib/users";
+
+const VALID_ROOMS = ["Venus", "Mars", "Mercury", "Earth", "Jupiter"] as const;
+type RoomKey = typeof VALID_ROOMS[number];
+
+function normalizeTelephone(raw: string): string | null {
+  const digits = raw.replace(/[\s.\-_()]/g, "");
+  if (/^\+33[1-9]\d{8}$/.test(digits)) return digits;
+  if (/^0[1-9]\d{8}$/.test(digits)) return "+33" + digits.slice(1);
+  return null;
+}
+
+export type UpdatePhoneResult =
+  | { ok: true; phone: string }
+  | { ok: false; error: string };
+
+export async function updatePhoneAction(formData: FormData): Promise<UpdatePhoneResult> {
+  const { userId } = await requireUser();
+  const raw = formData.get("telephone");
+  if (typeof raw !== "string") return { ok: false, error: "Numéro manquant" };
+  const normalized = normalizeTelephone(raw);
+  if (!normalized) return { ok: false, error: "Format invalide (ex : 06 12 34 56 78)" };
+  await setTelephone(userId, normalized);
+  revalidatePath("/dashboard/settings");
+  return { ok: true, phone: normalized };
+}
+
+export async function saveRoomPriorityAction(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await requireUser();
+  const raw = formData.get("priority");
+  if (typeof raw !== "string") return { ok: false, error: "missing" };
+  const list = raw.split(",").map((s) => s.trim()).filter((s): s is RoomKey => (VALID_ROOMS as readonly string[]).includes(s));
+  if (list.length !== VALID_ROOMS.length) return { ok: false, error: "incomplete" };
+  await setRoomPriority(userId, list);
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
 
 export async function activateWatchAction(): Promise<void> {
   let success = false;

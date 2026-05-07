@@ -1,7 +1,7 @@
 # RoomBooker — Roadmap
 
 **Dernière update** : 2026-05-07
-**Version prod** : v0.6.0
+**Version prod** : v0.8.0
 **Stack** : Next.js 16 / TypeScript / MongoDB (cluster partagé EDJ Labs) / fetch HTTP-only Skedda
 
 ---

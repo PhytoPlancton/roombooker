@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { ROOMS } from "@/lib/ui/rooms";
 import { initials } from "@/lib/ui/format";
 import type { BookingRules } from "@/lib/users";
-import { activateWatchAction, deactivateWatchAction, saveRulesAction } from "../../actions";
+import type { RoomName } from "@/lib/bookings";
+import { activateWatchAction, deactivateWatchAction, saveRulesAction, saveRoomPriorityAction } from "../../actions";
+import { PriorityDnD } from "./PriorityDnD";
+import { PhoneEditor } from "./PhoneEditor";
 
 interface Props {
   user: {
@@ -16,6 +18,7 @@ interface Props {
     telephone: string;
   };
   rules: BookingRules;
+  priority: RoomName[];
   watchActive: boolean;
   initialSection: string;
   flashSuccess: string | null;
@@ -29,7 +32,7 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
-export function SettingsView({ user, rules, watchActive, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, watchActive, initialSection, flashSuccess, flashError }: Props) {
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
 
@@ -72,8 +75,8 @@ export function SettingsView({ user, rules, watchActive, initialSection, flashSu
 
         <div className="settings-content">
           {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} />}
-          {active === "rules" && <RulesSection rules={rules} />}
-          {active === "notifs" && <NotifsSection telephone={user.telephone} />}
+          {active === "rules" && <RulesSection rules={rules} priority={priority} />}
+          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} />}
           {active === "account" && <AccountSection user={user} />}
         </div>
       </div>
@@ -177,7 +180,24 @@ function ConnectionsSection({ user, watchActive }: { user: Props["user"]; watchA
   );
 }
 
-function RulesSection({ rules }: { rules: BookingRules }) {
+function RulesSection({ rules, priority }: { rules: BookingRules; priority: RoomName[] }) {
+  const [order, setOrder] = useState<RoomName[]>(priority);
+  const [savedHint, setSavedHint] = useState(false);
+  const [, startTransition] = useTransition();
+
+  const handleOrderChange = (next: RoomName[]) => {
+    setOrder(next);
+    const fd = new FormData();
+    fd.set("priority", next.join(","));
+    startTransition(async () => {
+      const r = await saveRoomPriorityAction(fd);
+      if (r.ok) {
+        setSavedHint(true);
+        setTimeout(() => setSavedHint(false), 1500);
+      }
+    });
+  };
+
   return (
     <section>
       <h2 className="settings-h">Règles de réservation auto</h2>
@@ -219,30 +239,23 @@ function RulesSection({ rules }: { rules: BookingRules }) {
           />
         </div>
 
-        <div className="settings-divider" />
-
-        <h3 className="settings-h-sub">Choix de la salle</h3>
-        <p className="toggle-row-desc" style={{ marginBottom: 12 }}>
-          On prend la plus petite salle libre. Si occupée, on monte d'un cran.
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          {ROOMS.slice().sort((a, b) => a.cap - b.cap).map((r, i, arr) => (
-            <span key={r.id} style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-              <span className="room-pill">
-                <span className="room-icon" style={{ background: r.color }}>{r.name[0]}</span>
-                {r.name}
-              </span>
-              {i < arr.length - 1 && <Icon.arrow size={14} />}
-            </span>
-          ))}
-        </div>
-
-        <div className="settings-divider" />
-
-        <button className="btn btn-primary" type="submit">
+        <button className="btn btn-primary" type="submit" style={{ marginBottom: 8 }}>
           <Icon.check size={14} /> Enregistrer les règles
         </button>
       </form>
+
+      <div className="settings-divider" />
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <h3 className="settings-h-sub" style={{ margin: 0 }}>Choix de la salle</h3>
+        {savedHint && (
+          <span style={{ fontSize: 12, color: "var(--success)" }}>
+            <Icon.check size={11} /> ordre enregistré
+          </span>
+        )}
+      </div>
+
+      <PriorityDnD initialOrder={order} onChange={handleOrderChange} />
     </section>
   );
 }
@@ -305,7 +318,7 @@ function RuleCard({
   );
 }
 
-function NotifsSection({ telephone }: { telephone: string }) {
+function NotifsSection({ telephone, email }: { telephone: string; email: string }) {
   return (
     <section>
       <h2 className="settings-h">Notifications</h2>
@@ -318,7 +331,7 @@ function NotifsSection({ telephone }: { telephone: string }) {
 
       <div className="settings-divider" />
 
-      <h3 className="settings-h-sub">Email</h3>
+      <h3 className="settings-h-sub">Email · {email}</h3>
       <ToggleRowDisplay enabled title="Confirmation de réservation" desc="Avec un lien pour annuler en 1 clic." />
 
       <p className="toggle-row-desc" style={{ marginTop: 16 }}>
@@ -365,10 +378,10 @@ function AccountSection({ user }: { user: Props["user"] }) {
 
       <div className="settings-divider" />
 
-      <div className="settings-row" style={{ justifyContent: "space-between" }}>
+      <div className="settings-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Numéro de mobile</div>
-          <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{user.telephone} · vérifié</div>
+          <PhoneEditor initial={user.telephone} />
         </div>
       </div>
 

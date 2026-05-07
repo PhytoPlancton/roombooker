@@ -15,14 +15,8 @@ export default async function RoomsPage() {
   if (!user.telephone) redirect("/onboarding");
 
   const allBookings = await listBookingsForUser(user._id, 100);
-  // Today's bookings, by room
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today.getTime() + 86400000);
-  const todays = allBookings.filter((b) => {
-    const d = new Date(b.meeting.startsAt);
-    return d >= today && d < tomorrow && b.status !== "cancelled";
-  });
+  // Show ALL active bookings grouped by room (matches the dashboard's "Mes salles réservées" widget)
+  const activeBookings = allBookings.filter((b) => b.status !== "cancelled");
 
   return (
     <div className="page">
@@ -35,14 +29,14 @@ export default async function RoomsPage() {
             <span className="me-pill">
               <Icon.user size={11} /> Toi
             </span>{" "}
-            État des 5 salles, et tes blocs sur chacune.
+            État des 5 salles, et tous tes meetings réservés sur chacune.
           </p>
         </div>
       </div>
 
       <div className="rooms-grid">
         {ROOMS.map((r) => {
-          const myBookings = todays
+          const myBookings = activeBookings
             .filter((b) => b.room === r.id)
             .sort((a, b) => (a.meeting.startsAt > b.meeting.startsAt ? 1 : -1));
           return (
@@ -106,7 +100,7 @@ export default async function RoomsPage() {
               <footer className="room-card-foot">
                 <span className="room-card-mine">
                   <Icon.user size={12} />
-                  <strong>{myBookings.length}</strong> meeting{myBookings.length > 1 ? "s" : ""} aujourd'hui
+                  <strong>{myBookings.length}</strong> meeting{myBookings.length > 1 ? "s" : ""} au total
                 </span>
               </footer>
             </section>

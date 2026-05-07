@@ -88,7 +88,10 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     return;
   }
 
-  const roomsToTry = ROOM_PRIORITY.map((name) => ({
+  const priorityList = (user.roomPriority && user.roomPriority.length > 0)
+    ? user.roomPriority
+    : ROOM_PRIORITY;
+  const roomsToTry = priorityList.map((name) => ({
     name,
     spaceId: ROOM_SPACE_IDS[name],
   }));

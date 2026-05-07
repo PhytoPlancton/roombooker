@@ -48,9 +48,14 @@ export interface UserDoc {
   slackUserId: string | null;
   notifChannels: ("sms" | "email")[];
   bookingRules?: BookingRules; // optional for backwards-compat with existing users — fall back to DEFAULT
+  roomPriority?: ("Venus" | "Mars" | "Mercury" | "Earth" | "Jupiter")[]; // optional, fall back to DEFAULT_ROOM_PRIORITY
   createdAt: Date;
   updatedAt: Date;
 }
+
+export const DEFAULT_ROOM_PRIORITY: ("Venus" | "Mars" | "Mercury" | "Earth" | "Jupiter")[] = [
+  "Venus", "Mars", "Mercury", "Earth", "Jupiter",
+];
 
 async function usersCol(): Promise<Collection<UserDoc>> {
   const db = await getDb();
@@ -123,6 +128,17 @@ export async function setBookingRules(userId: ObjectId, rules: BookingRules): Pr
   await col.updateOne(
     { _id: userId },
     { $set: { bookingRules: rules, updatedAt: new Date() } },
+  );
+}
+
+export async function setRoomPriority(
+  userId: ObjectId,
+  priority: ("Venus" | "Mars" | "Mercury" | "Earth" | "Jupiter")[],
+): Promise<void> {
+  const col = await usersCol();
+  await col.updateOne(
+    { _id: userId },
+    { $set: { roomPriority: priority, updatedAt: new Date() } },
   );
 }
 
