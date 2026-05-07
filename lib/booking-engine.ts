@@ -53,11 +53,36 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
 
   const daysAhead = differenceInDays(args.meeting.startsAt, new Date());
   if (daysAhead > MAX_DAYS_AHEAD) {
+    // Compute the date when the cron will pick it up (10 days before the meeting).
+    const willTryAt = new Date(args.meeting.startsAt.getTime() - MAX_DAYS_AHEAD * 86400_000);
+    const meetingDateFr = args.meeting.startsAt.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "long",
+    });
+    const willTryDateFr = willTryAt.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "long",
+    });
+
+    await notifyUser({
+      user: {
+        _id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        telephone: user.telephone,
+        notifChannels: user.notifChannels,
+      },
+      iCalUID: args.iCalUID,
+      smsText: `RoomBooker: meeting du ${meetingDateFr} hors fenetre Skedda (max 10j). Reservation auto le ${willTryDateFr}.`,
+      emailSubject: `RoomBooker — réservation différée pour le ${meetingDateFr}`,
+      emailHtml: `<p>Bonjour ${user.firstName},</p><p>Ton meeting du ${meetingDateFr} est trop loin pour Skedda (max 10 jours à l'avance). Je le réserverai automatiquement le <strong>${willTryDateFr}</strong>.</p><p>Aucune action de ta part — je m'en occupe.</p>`,
+    });
+
     await audit({
       action: "booking_engine_finished",
       userId: args.userId,
       iCalUID: args.iCalUID,
-      details: { result: "deferred_window", daysAhead },
+      details: { result: "deferred_window", daysAhead, willTryAt: willTryAt.toISOString() },
     });
     return;
   }

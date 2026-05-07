@@ -72,7 +72,7 @@ async function processChange(user: UserDoc): Promise<void> {
       userId: user._id,
       details: { reason: "no_sync_token" },
     });
-    await activateWatchForUser(user._id);
+    await activateWatchForUser(user._id, { source: "calendar_resync" });
     return;
   }
 
@@ -84,7 +84,7 @@ async function processChange(user: UserDoc): Promise<void> {
       userId: user._id,
       details: { reason: "syncToken_expired" },
     });
-    await activateWatchForUser(user._id);
+    await activateWatchForUser(user._id, { source: "calendar_resync" });
     return;
   }
 
