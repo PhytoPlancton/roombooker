@@ -1,7 +1,7 @@
 # RoomBooker — Roadmap
 
 **Dernière update** : 2026-05-07
-**Version prod** : v0.5.0
+**Version prod** : v0.6.0
 **Stack** : Next.js 16 / TypeScript / MongoDB (cluster partagé EDJ Labs) / fetch HTTP-only Skedda
 
 ---
@@ -69,11 +69,11 @@
 - [x] **Cron rattrapage pending bookings > 10j** — `setInterval` 6h. Query les `status: pending` dont la date passe sous 10j, re-trigger `processBookingForEvent`.
 - [x] **Notif "deferred" à la création** — SMS+email envoyé directement quand meeting > 10j est détecté, mentionne la date à laquelle le booking auto sera tenté.
 
-### Priorité 2 — Edge cases sales
+### Priorité 2 — Edge cases sales ✅ (v0.6.0)
 
-- [ ] **Détection déplacement meeting** — si le sales change la date d'un meeting déjà booké : on détecte que l'iCalUID existe avec un `startsAt` différent → cancel l'ancienne résa Skedda + re-trigger booking sur la nouvelle date.
-- [ ] **Détection changement attendees** — si le sales retire le seul invité externe d'un meeting déjà booké : on n'a plus besoin de la salle, release.
-- [ ] **Récurrent** — actuellement skip total. À voir si on permet le booking d'événements récurrents (chaque occurrence individuellement).
+- [x] **Détection déplacement meeting** — webhook compare `event.start.dateTime` à `existing.meeting.startsAt`, release + re-book si différent.
+- [x] **Détection changement attendees** — si plus aucun invité externe ou si `location` setté manuellement, release la salle.
+- [ ] **Récurrent** — toujours skip pour MVP. À considérer si demandé à l'usage.
 
 ### Priorité 3 — Onboarding équipe
 
@@ -81,21 +81,20 @@
 - [ ] Brevo : vérifier email sender pour activer l'envoi mail (actuellement seul le SMS marche)
 - [ ] Slack : activer quand admin Workspace autorisé (`SLACK_ENABLED=true` + tokens)
 
-### Priorité 4 — Confort / V2
+### Priorité 4 — Confort (partiellement fait en v0.6.0)
 
-- [ ] Endpoint debug `/api/debug/notify-test?secret=&user=` pour tester l'envoi SMS/email d'un user spécifique sans attendre un meeting
-- [ ] Page admin (réservée à un user "owner") qui list tous les users + leurs bookings
-- [ ] Stats : taux de succès Skedda, salles les plus utilisées, etc.
-- [ ] Webhooks de notif : si on échoue 3 bookings d'affilée, alerte SMS l'admin
-- [ ] Lien magique d'annulation dans le SMS : `/action/cancel?token=xxx` au lieu de devoir aller sur le dashboard
-- [ ] Slack auto-cancel button (V2 quand Slack activé)
+- [x] **Lien magique cancel dans SMS** — `/c/<token>` avec HMAC stateless. Sales annule en 1 clic depuis son téléphone.
+- [x] **Endpoint `/api/debug/notify-test`** — test manuel du pipeline notif (SMS/email) sans attendre un meeting.
+- [ ] ~~Page admin / stats~~ — abandonné, over-engineering pour 5 sales.
+- [ ] ~~Alerte échecs centralisée~~ — l'audit log suffit.
+- [ ] Slack auto-cancel button — V2 quand Slack activé.
 
-### Priorité 5 — Sécurité / production-readiness
+### Priorité 5 — Sécurité / production-readiness (action user)
 
-- [ ] Anonymiser les emails dans les audit logs (hash) — actuellement en clair dans Mongo
-- [ ] Rate limiting sur les endpoints debug (max 10 req/min par IP)
-- [ ] Verification Google Cloud (process formel pour retirer le warning "App not verified")
-- [ ] Migration vers domaine custom genre `auto-booking.muchbetter.ai` (vs `roombooker.nmt.ovh`)
+- [ ] ~~Anonymiser les emails dans audit logs~~ — over-paranoid pour 5 sales internes, skip.
+- [ ] ~~Rate limiting endpoints debug~~ — déjà protégés par `?secret=`, suffit.
+- [ ] **Verification Google Cloud** — action user (process formel ~1 semaine, retire le warning "App not verified" lors du 1er login). Pas urgent, les sales peuvent contourner avec "Avancé > Continuer".
+- [ ] **Custom domain** `auto-booking.muchbetter.ai` — action user (DNS + Google Cloud OAuth redirect URIs à update + cookies Skedda à re-tester).
 
 ---
 
