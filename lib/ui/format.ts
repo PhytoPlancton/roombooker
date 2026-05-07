@@ -18,6 +18,22 @@ export function durationLabel(start: string, end: string): string {
   return `${Math.floor(m / 60)} h ${m % 60}`;
 }
 
+/**
+ * Compact date for event rows: "Aujourd'hui" / "Demain" / "Mer. 13 mai".
+ * No year — assume same year as today.
+ */
+export function shortDayLabel(d: Date): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(d);
+  target.setHours(0, 0, 0, 0);
+  const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return "Demain";
+  if (diff === -1) return "Hier";
+  return d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "short" });
+}
+
 /** "Aujourd'hui · Mer. 6 mai" style label for a date relative to today. */
 export function dayLabel(d: Date): string {
   const today = new Date();

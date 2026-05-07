@@ -2,7 +2,7 @@
 
 import { Icon } from "@/components/ui/Icon";
 import { roomById, ATTENDEE_COLORS } from "@/lib/ui/rooms";
-import { durationLabel, initials } from "@/lib/ui/format";
+import { durationLabel, initials, shortDayLabel } from "@/lib/ui/format";
 import type { EventVM } from "@/lib/ui/serialize";
 
 interface EventDrawerProps {
@@ -43,7 +43,7 @@ export function EventDrawer({ event, open, onClose, cancelAction, onActionToast 
                 </>
               )}
               <span>
-                {event.start} – {event.end}
+                {shortDayLabel(new Date(event.startISO))} · {event.start} – {event.end}
               </span>
               <span>·</span>
               <span>{durationLabel(event.start, event.end)}</span>

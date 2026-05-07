@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { ROOMS, roomById } from "@/lib/ui/rooms";
-import { durationLabel } from "@/lib/ui/format";
+import { durationLabel, shortDayLabel } from "@/lib/ui/format";
 import type { EventVM } from "@/lib/ui/serialize";
 import type { RoomName } from "@/lib/bookings";
 import { EventDrawer } from "./EventDrawer";
@@ -259,6 +259,11 @@ function KpiRow({
     return d.getMonth() === m && d.getFullYear() === y;
   }).length;
   const upcoming = events.filter((e) => e.status === "synced" && new Date(e.startISO) > now).length;
+
+  // Estimated time saved: each manual Skedda booking takes ~40s (open Skedda,
+  // navigate to slot, fill form, confirm). Multiplied by all-time synced bookings.
+  const totalSynced = counts.synced;
+  const minutesSaved = Math.round((totalSynced * 40) / 60);
   return (
     <div className="kpi-row kpi-row-2">
       <button
@@ -295,10 +300,13 @@ function KpiRow({
       </button>
       <div className="kpi">
         <Spark color="var(--brand)" pattern="up" />
-        <span className="kpi-label">Salles réservées · auto</span>
-        <span className="kpi-value">{syncedThisMonth}</span>
+        <span className="kpi-label">Temps gagné · estimé</span>
+        <span className="kpi-value">
+          {minutesSaved}
+          <span style={{ fontSize: 18, color: "var(--ink-3)", marginLeft: 4, fontWeight: 500 }}>min</span>
+        </span>
         <span className="kpi-meta">
-          ce mois-ci · <strong>{upcoming}</strong> à venir
+          <strong>{syncedThisMonth}</strong> salle{syncedThisMonth > 1 ? "s" : ""} bookée{syncedThisMonth > 1 ? "s" : ""} ce mois · <strong>{upcoming}</strong> à venir
         </span>
       </div>
     </div>
@@ -324,7 +332,10 @@ function EventRow({ event, selected, onClick }: { event: EventVM; selected: bool
   return (
     <li className="event" data-selected={selected} onClick={onClick}>
       <div className="event-time">
-        {event.start}
+        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+          {shortDayLabel(new Date(event.startISO))}
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>{event.start}</span>
         <small>{event.end}</small>
       </div>
       <div className="event-body">

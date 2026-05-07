@@ -6,7 +6,7 @@ import { listBookingsForUser } from "@/lib/bookings";
 import { ROOMS } from "@/lib/ui/rooms";
 import { Icon } from "@/components/ui/Icon";
 import { PlanetIcon } from "@/components/ui/PlanetIcon";
-import { formatHHMM } from "@/lib/ui/format";
+import { formatHHMM, shortDayLabel } from "@/lib/ui/format";
 
 export default async function RoomsPage() {
   const session = await getSession();
@@ -103,9 +103,14 @@ export default async function RoomsPage() {
                           fontVariantNumeric: "tabular-nums",
                           fontWeight: 600,
                           color: "var(--ink-2)",
-                          minWidth: 90,
+                          minWidth: 180,
+                          fontSize: 12,
                         }}
                       >
+                        <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>
+                          {shortDayLabel(new Date(b.meeting.startsAt))}
+                        </span>
+                        {" · "}
                         {formatHHMM(new Date(b.meeting.startsAt))} – {formatHHMM(new Date(b.meeting.endsAt))}
                       </span>
                       <span style={{ flex: 1, color: "var(--ink)" }}>—</span>

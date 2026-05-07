@@ -5,6 +5,11 @@
   vertical-align: -2px;
 }
 
+/* Event row first column needs more room now that we show the day label. */
+.event {
+  grid-template-columns: 96px 1fr auto !important;
+}
+
 /* Filter chips: keep on one row when there is room, scroll horizontally otherwise. */
 .card-header .chips {
   flex-wrap: nowrap;
