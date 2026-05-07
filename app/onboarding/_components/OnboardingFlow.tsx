@@ -163,7 +163,13 @@ export function OnboardingFlow({ userEmail, firstName, lastName, flashError }: P
 
         <div className="onboard-foot">
           <span>roombooker · sync Google Cal ↔ Skedda</span>
-          <span>Besoin d'aide ? hello@roombooker.app</span>
+          <span>
+            <a href="/privacy" style={{ color: "var(--ink-3)", textDecoration: "none" }}>
+              Privacy
+            </a>
+            {" · "}
+            Contact : nicolas.monniot14@gmail.com
+          </span>
         </div>
       </div>
 
