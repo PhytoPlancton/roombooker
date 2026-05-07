@@ -171,12 +171,38 @@ async function processChange(user: UserDoc): Promise<void> {
           },
         });
         // fall through to the create-booking flow below
-      } else if (
-        !decision.shouldBook &&
-        (decision.reason === "no_rule_matched" || decision.reason === "location_already_set")
-      ) {
-        // Same date but conditions broke (last external attendee removed,
-        // or sales filled location manually) → release the room.
+      } else if (!decision.shouldBook && decision.reason === "location_already_set") {
+        // CRITICAL: when we successfully book a room, we update the Calendar
+        // event's location field with the room name. Google then immediately
+        // pushes a webhook for that change, and our shouldBookRoom() returns
+        // "location_already_set" because the location is now non-empty.
+        //
+        // We must NOT release the booking in that case — it's our own write.
+        // Only release if the user manually set a different location (i.e., the
+        // current location string is not the room we booked).
+        const ourRoom = (existing.room || "").trim().toLowerCase();
+        const eventLoc = (event.location || "").trim().toLowerCase();
+        if (eventLoc && eventLoc === ourRoom) {
+          await audit({
+            action: "event_evaluated",
+            userId: user._id,
+            iCalUID: event.iCalUID,
+            details: { skip: "self_location_write", room: existing.room },
+          });
+          continue;
+        }
+        // Otherwise: user manually changed location → release.
+        await releaseBookingByICalUIDAuto(event.iCalUID);
+        await audit({
+          action: "event_evaluated",
+          userId: user._id,
+          iCalUID: event.iCalUID,
+          details: { decision: "release", reason: "user_changed_location", was: existing.room, now: event.location },
+        });
+        continue;
+      } else if (!decision.shouldBook && decision.reason === "no_rule_matched") {
+        // Same date but rules no longer match (e.g. last external attendee
+        // was removed) → release the room.
         await releaseBookingByICalUIDAuto(event.iCalUID);
         await audit({
           action: "event_evaluated",
