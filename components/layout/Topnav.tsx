@@ -40,7 +40,14 @@ export function Topnav({ userName, syncedCount }: TopnavProps) {
         <span>Sync active · {syncedCount} events</span>
       </span>
       <ThemeToggle />
-      <div className="avatar" title={userName}>{initials(userName)}</div>
+      <Link
+        href="/dashboard/settings?section=account"
+        className="avatar"
+        title={`${userName} — voir mon compte`}
+        style={{ textDecoration: "none" }}
+      >
+        {initials(userName)}
+      </Link>
     </header>
   );
 }

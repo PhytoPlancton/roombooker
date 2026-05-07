@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
 import type { BookingRules } from "@/lib/users";
@@ -20,6 +21,7 @@ interface Props {
   rules: BookingRules;
   priority: RoomName[];
   watchActive: boolean;
+  watchExpiryISO: string | null;
   initialSection: string;
   flashSuccess: string | null;
   flashError: string | null;
@@ -32,9 +34,18 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
-export function SettingsView({ user, rules, priority, watchActive, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
+  const searchParams = useSearchParams();
+  const sectionFromUrl = searchParams.get("section");
+
+  useEffect(() => {
+    if (sectionFromUrl && sectionFromUrl !== active) {
+      setActive(sectionFromUrl);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionFromUrl]);
 
   useEffect(() => {
     if (!toast) return;
@@ -74,7 +85,7 @@ export function SettingsView({ user, rules, priority, watchActive, initialSectio
         </nav>
 
         <div className="settings-content">
-          {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} />}
+          {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} watchExpiryISO={watchExpiryISO} />}
           {active === "rules" && <RulesSection rules={rules} priority={priority} />}
           {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} />}
           {active === "account" && <AccountSection user={user} />}
@@ -129,7 +140,21 @@ function ConnectionCard({
   );
 }
 
-function ConnectionsSection({ user, watchActive }: { user: Props["user"]; watchActive: boolean }) {
+function ConnectionsSection({
+  user,
+  watchActive,
+  watchExpiryISO,
+}: {
+  user: Props["user"];
+  watchActive: boolean;
+  watchExpiryISO: string | null;
+}) {
+  const expiry = watchExpiryISO ? new Date(watchExpiryISO) : null;
+  const daysLeft = expiry ? Math.ceil((expiry.getTime() - Date.now()) / 86400000) : null;
+  const expiryLabel = expiry
+    ? expiry.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "short" })
+    : null;
+
   return (
     <section>
       <h2 className="settings-h">Connexions</h2>
@@ -140,9 +165,13 @@ function ConnectionsSection({ user, watchActive }: { user: Props["user"]; watchA
           icon={<Icon.google size={28} />}
           name="Google Calendar"
           email={user.email}
-          ok={true}
-          metaPrimary="Lecture & écriture"
-          metaSecondary={watchActive ? "Surveillance active" : "Surveillance inactive"}
+          ok={watchActive}
+          metaPrimary={watchActive ? "Surveillance active" : "Surveillance inactive"}
+          metaSecondary={
+            watchActive && expiryLabel
+              ? `Renouvellement auto · expire le ${expiryLabel} (dans ${daysLeft}j)`
+              : "—"
+          }
         />
         <div className="connection-arrow">
           <span className="connection-arrow-line" />
@@ -157,17 +186,30 @@ function ConnectionsSection({ user, watchActive }: { user: Props["user"]; watchA
           email="antlerfrance.skedda.com"
           ok={true}
           metaPrimary="Lecture & écriture"
-          metaSecondary="Bookings via API HTTP"
+          metaSecondary="Booking via API HTTP"
         />
       </div>
 
-      <div className="settings-row">
+      <p className="toggle-row-desc" style={{ marginTop: 4, marginBottom: 16, lineHeight: 1.5 }}>
+        Le watch Google expire au bout de 7 jours. Un cron interne le renouvelle automatiquement
+        toutes les 24h pour ceux expirant dans moins de 48h. Si la sync casse pour une raison
+        inattendue, on auto-réinitialise et on te prévient par SMS.
+      </p>
+
+      <div className="settings-row" style={{ flexWrap: "wrap" }}>
         {watchActive ? (
-          <form action={deactivateWatchAction}>
-            <button className="btn btn-danger" type="submit">
-              <Icon.unlink size={14} /> Désactiver la surveillance
-            </button>
-          </form>
+          <>
+            <form action={activateWatchAction}>
+              <button className="btn btn-primary" type="submit" title="Renouveler immédiatement">
+                <Icon.refresh size={14} /> Renouveler maintenant
+              </button>
+            </form>
+            <form action={deactivateWatchAction}>
+              <button className="btn btn-danger" type="submit">
+                <Icon.unlink size={14} /> Désactiver
+              </button>
+            </form>
+          </>
         ) : (
           <form action={activateWatchAction}>
             <button className="btn btn-primary" type="submit">

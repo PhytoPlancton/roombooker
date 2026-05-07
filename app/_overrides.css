@@ -74,12 +74,14 @@
   100% { transform: scale(1); }
 }
 .priority-pill .priority-grip {
-  color: var(--ink-4);
-  opacity: 0.4;
-  font-size: 11px;
-  letter-spacing: 0;
+  color: var(--ink-3);
+  opacity: 0.55;
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 0.12s;
 }
-.priority-pill:hover .priority-grip { opacity: 0.7; }
+.priority-pill:hover .priority-grip { opacity: 0.95; }
+.priority-pill[data-dragging="true"] .priority-grip { opacity: 1; }
 .priority-arrow {
   color: var(--ink-4);
   display: inline-flex;

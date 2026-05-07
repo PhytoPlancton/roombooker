@@ -113,7 +113,16 @@ export function PriorityDnD({ initialOrder, onChange }: Props) {
                   }
                 }}
               >
-                <span className="priority-grip" aria-hidden>⋮⋮</span>
+                <span className="priority-grip" aria-hidden>
+                  <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+                    <circle cx="2" cy="3" r="1" />
+                    <circle cx="2" cy="7" r="1" />
+                    <circle cx="2" cy="11" r="1" />
+                    <circle cx="8" cy="3" r="1" />
+                    <circle cx="8" cy="7" r="1" />
+                    <circle cx="8" cy="11" r="1" />
+                  </svg>
+                </span>
                 <PlanetIcon planet={id} size={20} />
                 <span style={{ fontSize: 14, fontWeight: 500 }}>{room.name}</span>
               </button>

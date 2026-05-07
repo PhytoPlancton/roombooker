@@ -17,6 +17,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   if (!user.telephone) redirect("/onboarding");
 
   const watchActive = !!user.watchChannelId && !!user.watchExpiry && user.watchExpiry > new Date();
+  const watchExpiryISO = user.watchExpiry ? user.watchExpiry.toISOString() : null;
 
   return (
     <SettingsView
@@ -30,6 +31,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       rules={user.bookingRules ?? DEFAULT_BOOKING_RULES}
       priority={user.roomPriority ?? DEFAULT_ROOM_PRIORITY}
       watchActive={watchActive}
+      watchExpiryISO={watchExpiryISO}
       initialSection={section || "connections"}
       flashSuccess={success || null}
       flashError={error || null}

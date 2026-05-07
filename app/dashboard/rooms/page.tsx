@@ -5,6 +5,7 @@ import { findUserById } from "@/lib/users";
 import { listBookingsForUser } from "@/lib/bookings";
 import { ROOMS } from "@/lib/ui/rooms";
 import { Icon } from "@/components/ui/Icon";
+import { PlanetIcon } from "@/components/ui/PlanetIcon";
 import { formatHHMM } from "@/lib/ui/format";
 
 export default async function RoomsPage() {
@@ -43,8 +44,16 @@ export default async function RoomsPage() {
             <section key={r.id} className="room-card">
               <header className="room-card-head">
                 <div className="room-card-head-l">
-                  <div className="room-avatar room-avatar-lg" style={{ background: r.color }}>
-                    {r.name[0]}
+                  <div
+                    className="room-avatar room-avatar-lg"
+                    style={{
+                      background: "var(--bg-soft)",
+                      border: "1px solid var(--line)",
+                      display: "grid",
+                      placeItems: "center",
+                    }}
+                  >
+                    <PlanetIcon planet={r.id} size={36} />
                   </div>
                   <div>
                     <h3 className="room-card-name">{r.name}</h3>
