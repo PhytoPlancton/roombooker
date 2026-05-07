@@ -148,3 +148,76 @@ export async function updateEventLocation(args: {
     requestBody: { location: args.location },
   });
 }
+
+const ROOM_MARKER_RE = /^\[Roombooker · [^\]]+\]\n+/;
+
+/**
+ * Writes the room reference to the Calendar event according to the user's
+ * preference. No-op when mode === "none".
+ */
+export async function applyRoomToCalendarEvent(args: {
+  user: UserDoc;
+  eventId: string;
+  room: string;
+}): Promise<void> {
+  const mode = args.user.roomLocationMode || "location";
+  if (mode === "none") return;
+  const cal = calendarFor(args.user);
+  if (mode === "location") {
+    await cal.events.patch({
+      calendarId: "primary",
+      eventId: args.eventId,
+      requestBody: { location: args.room },
+    });
+    return;
+  }
+  // mode === "description": fetch current description, strip any prior
+  // marker, prepend the new one.
+  const got = await cal.events.get({ calendarId: "primary", eventId: args.eventId });
+  const current = (got.data.description || "").replace(ROOM_MARKER_RE, "");
+  const next = `[Roombooker · ${args.room}]\n\n${current}`;
+  await cal.events.patch({
+    calendarId: "primary",
+    eventId: args.eventId,
+    requestBody: { description: next },
+  });
+}
+
+/**
+ * Reverts whatever applyRoomToCalendarEvent had written. Used at release time
+ * so we don't leave stale "Salle: Mars" in the event after a cancellation.
+ * Tolerates user manual edits — only strips our own marker.
+ */
+export async function removeRoomFromCalendarEvent(args: {
+  user: UserDoc;
+  eventId: string;
+  room: string;
+}): Promise<void> {
+  const mode = args.user.roomLocationMode || "location";
+  if (mode === "none") return;
+  const cal = calendarFor(args.user);
+  if (mode === "location") {
+    // Only clear the location if it still matches what we wrote.
+    const got = await cal.events.get({ calendarId: "primary", eventId: args.eventId });
+    const current = (got.data.location || "").trim();
+    if (current.toLowerCase() === args.room.trim().toLowerCase()) {
+      await cal.events.patch({
+        calendarId: "primary",
+        eventId: args.eventId,
+        requestBody: { location: "" },
+      });
+    }
+    return;
+  }
+  // mode === "description"
+  const got = await cal.events.get({ calendarId: "primary", eventId: args.eventId });
+  const current = got.data.description || "";
+  const stripped = current.replace(ROOM_MARKER_RE, "");
+  if (stripped !== current) {
+    await cal.events.patch({
+      calendarId: "primary",
+      eventId: args.eventId,
+      requestBody: { description: stripped },
+    });
+  }
+}

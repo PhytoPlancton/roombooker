@@ -19,10 +19,10 @@ export function Topnav({ userName, syncedCount }: TopnavProps) {
 
   return (
     <header className="topnav">
-      <div className="brand">
+      <Link href="/dashboard" className="brand" style={{ textDecoration: "none", color: "inherit" }}>
         <div className="brand-dot">R</div>
         <span className="brand-name">roombooker</span>
-      </div>
+      </Link>
       <nav className="topnav-tabs">
         <Link className="topnav-tab" href="/dashboard" aria-current={isDash ? "page" : undefined}>
           Dashboard

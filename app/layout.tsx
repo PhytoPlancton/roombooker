@@ -12,10 +12,10 @@ const PITCH = "Une salle physique réservée à chaque meeting Google Calendar. 
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Roombooker — Une salle, à chaque meeting Google Cal.",
+  title: "roombooker, une salle à chaque meeting Google Cal.",
   description: PITCH,
   openGraph: {
-    title: "Roombooker — Une salle, à chaque meeting Google Cal.",
+    title: "roombooker, une salle à chaque meeting Google Cal.",
     description: PITCH,
     url: SITE_URL,
     siteName: "Roombooker",
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Roombooker — Une salle, à chaque meeting Google Cal.",
+    title: "roombooker, une salle à chaque meeting Google Cal.",
     description: PITCH,
   },
 };

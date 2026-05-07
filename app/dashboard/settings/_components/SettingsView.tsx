@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
 import type { BookingRules } from "@/lib/users";
 import type { RoomName } from "@/lib/bookings";
-import { activateWatchAction, deactivateWatchAction, saveRulesAction, saveRoomPriorityAction } from "../../actions";
+import { activateWatchAction, deactivateWatchAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction } from "../../actions";
 import { PriorityDnD } from "./PriorityDnD";
 import { PhoneEditor } from "./PhoneEditor";
 
@@ -20,6 +20,7 @@ interface Props {
   };
   rules: BookingRules;
   priority: RoomName[];
+  roomLocationMode: "location" | "description" | "none";
   watchActive: boolean;
   watchExpiryISO: string | null;
   initialSection: string;
@@ -34,7 +35,7 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
-export function SettingsView({ user, rules, priority, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, roomLocationMode, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
   const searchParams = useSearchParams();
@@ -87,7 +88,7 @@ export function SettingsView({ user, rules, priority, watchActive, watchExpiryIS
         <div className="settings-content">
           {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} watchExpiryISO={watchExpiryISO} />}
           {active === "rules" && <RulesSection rules={rules} priority={priority} />}
-          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} />}
+          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} />}
           {active === "account" && <AccountSection user={user} />}
         </div>
       </div>
@@ -360,7 +361,30 @@ function RuleCard({
   );
 }
 
-function NotifsSection({ telephone, email }: { telephone: string; email: string }) {
+function NotifsSection({
+  telephone,
+  email,
+  mode,
+}: {
+  telephone: string;
+  email: string;
+  mode: "location" | "description" | "none";
+}) {
+  const [current, setCurrent] = useState<"location" | "description" | "none">(mode);
+  const [, startTransition] = useTransition();
+  const [savedHint, setSavedHint] = useState(false);
+
+  const handleChange = (next: "location" | "description" | "none") => {
+    setCurrent(next);
+    const fd = new FormData();
+    fd.set("mode", next);
+    startTransition(async () => {
+      await saveRoomLocationModeAction(fd);
+      setSavedHint(true);
+      setTimeout(() => setSavedHint(false), 1500);
+    });
+  };
+
   return (
     <section>
       <h2 className="settings-h">Notifications</h2>
@@ -376,10 +400,80 @@ function NotifsSection({ telephone, email }: { telephone: string; email: string 
       <h3 className="settings-h-sub">Email · {email}</h3>
       <ToggleRowDisplay enabled title="Confirmation de réservation" desc="Avec un lien pour annuler en 1 clic." />
 
-      <p className="toggle-row-desc" style={{ marginTop: 16 }}>
-        Le détail des canaux sera customisable bientôt. Pour l'instant tout est activé par défaut.
+      <div className="settings-divider" />
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <h3 className="settings-h-sub" style={{ margin: 0 }}>Affichage de la salle dans Google Calendar</h3>
+        {savedHint && (
+          <span style={{ fontSize: 12, color: "var(--success)" }}>
+            <Icon.check size={11} /> enregistré
+          </span>
+        )}
+      </div>
+      <p className="toggle-row-desc" style={{ marginBottom: 12 }}>
+        Quand on réserve une salle pour toi, où est-ce qu'on note son nom dans l'event Google Calendar ?
       </p>
+      <RadioRow
+        name="loc-mode"
+        value="location"
+        checked={current === "location"}
+        onChange={() => handleChange("location")}
+        title="Dans le champ « Lieu »"
+        desc="Comportement par défaut. Le nom de la salle apparaît à côté de la date dans l'invitation."
+      />
+      <RadioRow
+        name="loc-mode"
+        value="description"
+        checked={current === "description"}
+        onChange={() => handleChange("description")}
+        title="Dans la description"
+        desc="On préfixe la description par « [Roombooker · Mars] » pour ne pas occuper le champ Lieu (utile si tu veux y mettre l'adresse réelle, le lien Meet, etc.)."
+      />
+      <RadioRow
+        name="loc-mode"
+        value="none"
+        checked={current === "none"}
+        onChange={() => handleChange("none")}
+        title="Nulle part"
+        desc="On ne touche pas du tout au meeting Google. La salle est réservée sur Skedda mais ne s'affiche que dans le dashboard Roombooker."
+      />
     </section>
+  );
+}
+
+function RadioRow({
+  name,
+  value,
+  checked,
+  onChange,
+  title,
+  desc,
+}: {
+  name: string;
+  value: string;
+  checked: boolean;
+  onChange: () => void;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <label
+      className="toggle-row"
+      style={{ cursor: "pointer", alignItems: "flex-start" }}
+    >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        onChange={onChange}
+        style={{ marginTop: 4 }}
+      />
+      <div style={{ flex: 1 }}>
+        <div className="toggle-row-title">{title}</div>
+        <div className="toggle-row-desc">{desc}</div>
+      </div>
+    </label>
   );
 }
 

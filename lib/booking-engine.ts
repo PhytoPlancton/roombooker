@@ -3,7 +3,7 @@ import { differenceInDays } from "date-fns";
 import { ROOM_PRIORITY, type RoomName, markBookingResult, findBookingByICalUID } from "./bookings";
 import { ROOM_SPACE_IDS, bookSkeddaHttp, type BookSkeddaResult } from "./skedda-http";
 import { notifyUser } from "./notify";
-import { updateEventLocation } from "./calendar";
+import { applyRoomToCalendarEvent } from "./calendar";
 import { findUserById, type UserDoc } from "./users";
 import { audit } from "./audit";
 import { signCancelToken } from "./magic-link";
@@ -138,16 +138,16 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
         skeddaCancelToken: result.cancelToken,
         skeddaCookies: result.cookies,
       });
-      await updateEventLocation({
+      await applyRoomToCalendarEvent({
         user,
         eventId: args.googleEventId,
-        location: room.name,
+        room: room.name,
       }).catch((err) => {
         audit({
           action: "error",
           userId: args.userId,
           iCalUID: args.iCalUID,
-          details: { where: "updateEventLocation", message: String(err) },
+          details: { where: "applyRoomToCalendarEvent", message: String(err) },
         });
       });
       const persisted = await findBookingByICalUID(args.iCalUID);

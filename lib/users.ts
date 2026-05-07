@@ -49,6 +49,13 @@ export interface UserDoc {
   notifChannels: ("sms" | "email")[];
   bookingRules?: BookingRules; // optional for backwards-compat with existing users — fall back to DEFAULT
   roomPriority?: ("Venus" | "Mars" | "Mercury" | "Earth" | "Jupiter")[]; // optional, fall back to DEFAULT_ROOM_PRIORITY
+  /**
+   * Where to write the room name in the Google Calendar event after a successful booking:
+   *  - "location": fill the event's location field (default, most visible to invitees)
+   *  - "description": prepend a "[Roombooker · X]" marker line to the description
+   *  - "none": don't touch the event at all
+   */
+  roomLocationMode?: "location" | "description" | "none";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -139,6 +146,17 @@ export async function setRoomPriority(
   await col.updateOne(
     { _id: userId },
     { $set: { roomPriority: priority, updatedAt: new Date() } },
+  );
+}
+
+export async function setRoomLocationMode(
+  userId: ObjectId,
+  mode: "location" | "description" | "none",
+): Promise<void> {
+  const col = await usersCol();
+  await col.updateOne(
+    { _id: userId },
+    { $set: { roomLocationMode: mode, updatedAt: new Date() } },
   );
 }
 

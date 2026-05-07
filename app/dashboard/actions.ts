@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/session";
 import { activateWatchForUser, deactivateWatchForUser } from "@/lib/watch";
 import { releaseBookingByIdAsUser } from "@/lib/release-booking";
-import { setBookingRules, setRoomPriority, setTelephone, type BookingRules } from "@/lib/users";
+import { setBookingRules, setRoomLocationMode, setRoomPriority, setTelephone, type BookingRules } from "@/lib/users";
 
 const VALID_ROOMS = ["Venus", "Mars", "Mercury", "Earth", "Jupiter"] as const;
 type RoomKey = typeof VALID_ROOMS[number];
@@ -31,6 +31,17 @@ export async function updatePhoneAction(formData: FormData): Promise<UpdatePhone
   await setTelephone(userId, normalized);
   revalidatePath("/dashboard/settings");
   return { ok: true, phone: normalized };
+}
+
+export async function saveRoomLocationModeAction(formData: FormData): Promise<{ ok: boolean }> {
+  const { userId } = await requireUser();
+  const raw = formData.get("mode");
+  const valid = ["location", "description", "none"] as const;
+  type Mode = typeof valid[number];
+  const mode = (typeof raw === "string" && (valid as readonly string[]).includes(raw) ? raw : "location") as Mode;
+  await setRoomLocationMode(userId, mode);
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
 }
 
 export async function saveRoomPriorityAction(formData: FormData): Promise<{ ok: boolean; error?: string }> {
