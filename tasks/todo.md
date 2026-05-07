@@ -1,241 +1,116 @@
-# RoomBooker — TODO
+# RoomBooker — Roadmap
 
-**Démarré** : 2026-05-05
-**Phase actuelle** : 5 — Annulation auto + bouton manuel (Phase 0-4 ✅)
-
----
-
-## Objectif produit
-Quand un sales crée un meeting Google Calendar avec ≥ 1 attendee externe, l'app book automatiquement une salle physique sur Skedda (antlerfrance.skedda.com) sans aucune action du sales.
+**Dernière update** : 2026-05-07
+**Version prod** : v0.4.1
+**Stack** : Next.js 16 / TypeScript / MongoDB (cluster partagé EDJ Labs) / fetch HTTP-only Skedda
 
 ---
 
-## Spec figée
+## ✅ État actuel — ce qui marche en prod
 
-### Trigger d'un booking
-Un meeting déclenche un booking si **TOUS** les critères sont remplis :
-- ≥ 1 attendee non-`@muchbetter.ai`
-- Sales = organizer du meeting (`organizer.email == userEmail`)
-- Pas récurrent (single occurrence)
-- `location` vide (sinon le sales a déjà fait quelque chose manuellement)
-- iCalUID pas déjà bookée (dédup multi-sales)
+### Authentification
+- OAuth Google direct (scopes Calendar + userinfo)
+- Session iron-session 30j httpOnly
+- Tokens OAuth chiffrés AES-256-GCM en DB
 
-### Salles (ordre de préférence)
-1. Venus (petite, 2-3 pers)
-2. Mars (petite)
-3. Mercury (petite)
-4. Earth (grande, fallback)
-5. Jupiter (grande, fallback)
+### Onboarding
+- Pages `/`, `/onboarding`, `/dashboard`, `/api/auth/{start,callback,logout}`
+- Validation téléphone FR + normalisation E.164
 
-### Window
-- Skedda interdit booking > 10 jours dans le futur
-- Si meeting > 10j → save en `pendingBookings`, cron 6h pour rattrapage quand passe sous 10j
+### Surveillance Calendar
+- Push notifications Google Calendar (`events.watch`)
+- Sync incrémental via `syncToken`
+- Dédup booking par `iCalUID` (index unique Mongo)
+- Bouton activate/deactivate watch dans dashboard
 
-### Conflit / aucune salle dispo
-- Notif au sales (SMS + email pour MVP, Slack plus tard) avec bouton/lien :
-  - "Décaler à [prochain créneau dispo, mêmes salles]" 
-  - "Annuler la résa auto"
+### Détection
+- Skip si : event annulé, récurrent, `location` déjà set, sales pas organizer, pas d'attendee externe
+- Trigger booking si tous les critères matchent
 
-### Annulation/déplacement Calendar
-- Sales supprime event → on annule la résa Skedda (testé OK par utilisateur)
-- Sales déplace event → on annule l'ancienne et re-book à la nouvelle date
+### Skedda HTTP (no Playwright)
+- Bootstrap session via `GET /booking` + `GET /webs`
+- Création venueuser guest (email `rb-<seed>-<room>@example.com`, unique par retry)
+- Booking via `POST /bookings`
+- Annulation via `DELETE /bookings/:id`
+- Title = `null` (pas de fuite du sujet du meeting)
+- Timezone Europe/Berlin (matche Paris)
+- Window 10j : si > 10j, booking marqué `pending` mais pas tenté immédiatement
 
----
+### Annulation
+- Bouton "Annuler" dans dashboard (auth check ownership)
+- Auto-release quand le sales annule le meeting Google Calendar
 
-## Stack technique
-- **Next.js 15** App Router + TypeScript
-- **MongoDB** natif driver (pas Mongoose, contrôle pool serré — limite 500 connexions)
-- **Playwright** headless (Chromium) pour automation Skedda
-- **OAuth Google direct** (scopes : `calendar.readonly` + `calendar.events`)
-- **Crypto** AES-256-GCM pour chiffrer tokens OAuth
-- **EDJ Labs SMS API** : `https://api.edj-labs.com/messages/send`, header `X-Api-Token`
-- **Email** : Brevo via API REST (`https://api.brevo.com/v3/smtp/email`)
-- **Slack** : code préparé, désactivé via `SLACK_ENABLED=false` (admin pas autorisé encore)
+### Notifications
+- SMS via EDJ Labs API (parse `failed` array correctement depuis v0.4.1)
+- Email Brevo (en attente sender vérifié côté user)
+- Slack stub désactivé (`SLACK_ENABLED=false`)
+- Audit log persistent en DB (`auditLog` collection)
 
----
+### Endpoints debug
+- `GET /api/debug/audit?secret=&limit=` : 100 dernières entrées audit
+- `GET /api/debug/skedda-list?secret=&days=` : bookings Skedda dans la window
+- `GET /api/debug/skedda-cancel?secret=&id=` : annule un ID spécifique
+- `GET /api/debug/skedda-cancel-all?secret=` : annule tout ce qu'on a en DB
 
-## Variables d'environnement (`.env.local`)
-```
-MONGODB_URI=mongodb+srv://tests:5sxj9BfNp6aQwio3@tests.dzdkhq8.mongodb.net
-MONGODB_DB=roombooker
-ENCRYPTION_KEY=<32 bytes hex, à générer>
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=https://roombooker.nmt.ovh/api/auth/google/callback
-GOOGLE_WEBHOOK_TOKEN=<secret aléatoire pour valider les push>
-PUBLIC_APP_URL=https://roombooker.nmt.ovh
-EDJ_SMS_API_TOKEN=d9f364ecd9184bcca1ad1b4139d4a6f7
-BREVO_API_KEY=xkeysib-...
-BREVO_SENDER_EMAIL=<email vérifié dans dashboard Brevo>
-BREVO_SENDER_NAME=RoomBooker
-SESSION_SECRET=<32 bytes hex pour cookies signés>
-SKEDDA_VENUE_URL=https://antlerfrance.skedda.com
-SLACK_ENABLED=false
-SLACK_BOT_TOKEN=
-SLACK_SIGNING_SECRET=
-```
+### Déploiement
+- Image Docker (~50 MB, plus de Chromium)
+- GHCR public + GitHub Actions auto-build sur tag
+- EDJ Labs stack avec Traefik labels + DNS Cloudflare
+- 256 MB RAM suffisent (vs ~400 MB avec Playwright)
 
 ---
 
-## Schéma Mongo
+## 🛠 Backlog priorisé
 
-### `users`
-```ts
-{
-  _id: ObjectId,
-  email: string,                  // pro @muchbetter.ai
-  firstName: string,              // depuis Google profile
-  lastName: string,
-  telephone: string,              // saisi à l'onboarding (Skedda l'exige)
-  googleTokens: {                 // chiffré AES-256-GCM
-    accessToken: string,          // encrypted
-    refreshToken: string,         // encrypted
-    expiresAt: Date
-  },
-  watchChannelId: string,
-  watchResourceId: string,
-  watchExpiry: Date,
-  slackUserId: string | null,     // null pour l'instant
-  notifChannels: ['sms', 'email'],// préférences
-  createdAt: Date
-}
-```
+### Priorité 1 — Robustesse opérationnelle (essentiel)
 
-### `bookings`
-```ts
-{
-  _id: ObjectId,
-  iCalUID: string,                // index unique (dédup)
-  googleEventId: string,
-  userId: ObjectId,
-  meeting: {
-    title: string,
-    startsAt: Date,
-    endsAt: Date,
-    attendees: string[]
-  },
-  room: 'Venus' | 'Mars' | 'Mercury' | 'Earth' | 'Jupiter',
-  skeddaBookingRef: string,       // identifiant trouvé dans Skedda (URL d'annulation, ID, etc)
-  skeddaCancelLink: string | null,// lien magique d'annulation (capturé du mail Skedda si possible)
-  status: 'booked' | 'cancelled' | 'failed',
-  createdAt: Date
-}
-```
+- [ ] **Notif au sales quand resync Google déclenchée** — si `syncToken` expire ou watch channel re-créé, envoyer SMS+email au sales pour qu'il sache qu'on a re-init la surveillance (ne devrait pas l'inquiéter mais transparence). Dans `lib/watch.ts > activateWatchForUser`, après le 1er onboarding, audit + notif.
+- [ ] **Cron renouvellement watches Google** — les watches Calendar expirent à 7 jours. `setInterval` au boot du container : toutes les 24h, query `findUsersWithExpiringWatch` (helper déjà écrit), re-activate.
+- [ ] **Cron rattrapage pending bookings > 10j** — `setInterval` 6h : query bookings `status: pending` dont `meeting.startsAt - now < 10j`, re-trigger `processBookingForEvent`. Le booking passera de `pending` → `booked` ou `failed` au moment où Skedda l'accepte.
+- [ ] **Notif "deferred" à la création** — quand un meeting est créé > 10j, envoyer un SMS au sales : *"Meeting du XX trop loin pour Skedda, je le réserverai automatiquement le YY (10j avant)"*. Sinon le sales peut s'inquiéter de ne rien recevoir.
 
-### `pendingBookings`
-```ts
-{
-  _id: ObjectId,
-  iCalUID: string,
-  userId: ObjectId,
-  meetingDate: Date,              // index pour cron
-  reason: 'window_too_far',
-  attempts: number,
-  lastAttemptAt: Date | null,
-  createdAt: Date
-}
-```
+### Priorité 2 — Edge cases sales
 
-### `auditLog` (pour debug)
-```ts
-{
-  _id: ObjectId,
-  userId: ObjectId,
-  iCalUID: string,
-  action: string,
-  result: 'success' | 'fail',
-  errorMessage: string | null,
-  screenshotPath: string | null,  // pour erreurs Skedda
-  timestamp: Date
-}
-```
+- [ ] **Détection déplacement meeting** — si le sales change la date d'un meeting déjà booké : on détecte que l'iCalUID existe avec un `startsAt` différent → cancel l'ancienne résa Skedda + re-trigger booking sur la nouvelle date.
+- [ ] **Détection changement attendees** — si le sales retire le seul invité externe d'un meeting déjà booké : on n'a plus besoin de la salle, release.
+- [ ] **Récurrent** — actuellement skip total. À voir si on permet le booking d'événements récurrents (chaque occurrence individuellement).
+
+### Priorité 3 — Onboarding équipe
+
+- [ ] Onboarding des 4 autres sales muchbetter.ai
+- [ ] Brevo : vérifier email sender pour activer l'envoi mail (actuellement seul le SMS marche)
+- [ ] Slack : activer quand admin Workspace autorisé (`SLACK_ENABLED=true` + tokens)
+
+### Priorité 4 — Confort / V2
+
+- [ ] Endpoint debug `/api/debug/notify-test?secret=&user=` pour tester l'envoi SMS/email d'un user spécifique sans attendre un meeting
+- [ ] Page admin (réservée à un user "owner") qui list tous les users + leurs bookings
+- [ ] Stats : taux de succès Skedda, salles les plus utilisées, etc.
+- [ ] Webhooks de notif : si on échoue 3 bookings d'affilée, alerte SMS l'admin
+- [ ] Lien magique d'annulation dans le SMS : `/action/cancel?token=xxx` au lieu de devoir aller sur le dashboard
+- [ ] Slack auto-cancel button (V2 quand Slack activé)
+
+### Priorité 5 — Sécurité / production-readiness
+
+- [ ] Anonymiser les emails dans les audit logs (hash) — actuellement en clair dans Mongo
+- [ ] Rate limiting sur les endpoints debug (max 10 req/min par IP)
+- [ ] Verification Google Cloud (process formel pour retirer le warning "App not verified")
+- [ ] Migration vers domaine custom genre `auto-booking.muchbetter.ai` (vs `roombooker.nmt.ovh`)
 
 ---
 
-## Plan par phase
+## 🚧 Blockers actuels
 
-### Phase 0 — Setup ✅
-- [x] Init Next.js 16 TypeScript App Router (passé de 15 à 16 — vuln dans 15.0.x, 16.2.4 stable)
-- [x] `package.json` + dépendances (mongodb, googleapis, playwright, iron-session, zod, date-fns)
-- [x] `lib/db.ts` — Mongo client singleton avec pool maxSize=20
-- [x] `lib/crypto.ts` — AES-256-GCM helpers
-- [x] `.env.example` complet
-- [x] `Dockerfile` (multi-stage, base Playwright officielle)
-- [x] `.github/workflows/build-and-push.yml`
-- [x] `tsconfig.json`, `next.config.js`, `.gitignore`
-- [x] **Vérifié** : `npx next build` passe, `npx tsc --noEmit` passe
-
-### Phase 1 — OAuth Google + Onboarding (CODE ✅, RUNTIME EN ATTENTE CREDENTIALS)
-- [~] Google Cloud Project + OAuth credentials (côté user — en cours)
-- [x] Page `/` (landing) avec bouton "Connect Google" + redirect si déjà loggué
-- [x] Route `/api/auth/google/start` (redirige vers Google avec state CSRF)
-- [x] Route `/api/auth/google/callback` (récupère tokens, crée user en DB chiffré)
-- [x] Page `/onboarding` (formulaire telephone, validation FR + normalisation E.164)
-- [x] Page `/dashboard` (statut user + placeholder bookings)
-- [x] Route `/api/auth/logout` (POST)
-- [x] Cookie de session signé via iron-session (30j, httpOnly, sameSite=lax)
-- [x] `lib/google.ts`, `lib/users.ts`, `lib/session.ts`
-- [x] **Vérifié** : `npx next build` passe avec toutes les routes
-- [ ] Test runtime : créer compte Google test, vérifier flow complet
-
-### Phase 2 — Calendar Watch + Detection (CODE ✅, RUNTIME EN ATTENTE D'URL PUBLIQUE)
-- [x] `lib/calendar.ts` — startWatch / stopWatch / syncSince / updateEventLocation
-- [x] `lib/booking-rules.ts` — `shouldBookRoom` avec règles spec (cancelled/recurring/organizer/external/location)
-- [x] `lib/bookings.ts` — collection bookings avec dédup unique sur iCalUID
-- [x] `lib/watch.ts` — orchestration activate/deactivate watch
-- [x] Route `/api/webhooks/calendar` — vérif token, sync incrémental, dédup, fire-and-forget
-- [x] Server actions `activateWatchAction` / `deactivateWatchAction`
-- [x] Dashboard : bouton activer/désactiver, table bookings
-- [x] **Vérifié** : `npx next build` passe avec /api/webhooks/calendar
-- [ ] Test runtime : créer meeting avec invité externe → voir booking pending en DB
-- [ ] Cron renouvellement watches < 48h (à faire après déploiement)
-
-### Phase 3 — Skedda Booker (CODE ✅, RUNTIME TBD)
-- [x] Module `lib/skedda.ts` avec Playwright headless Chromium
-- [x] URL pré-construite avec `nbstart`/`nbend`/`nbspaces` (skip nav clic-clic)
-- [x] Flow : email gate → form principal (firstName/lastName/phone/org/title/terms) → confirm
-- [x] Parser des résultats : success + cancelLink, ou erreur classifiée (slot_unavailable / outside_hours / window_too_far / form_unexpected / navigation_failed / unknown)
-- [x] Screenshots + dump HTML sur erreur (`/app/debug-screenshots`)
-- [x] `lib/booking-engine.ts` orchestre : window 10j check, iteration sur rooms, mark booking result, notif user
-- [x] `lib/notify.ts` SMS via EDJ Labs API + Email via Brevo API (fallback gracieux si keys manquent)
-- [x] Hook dans webhook Calendar (fire-and-forget après création pending booking)
-- [x] Update Calendar event `location` avec le nom de la salle après succès
-- [x] Dockerfile copie playwright explicitement (output: standalone l'omet sinon)
-- [x] **Vérifié** : `npx next build` passe, `npx tsc --noEmit` passe
-- [ ] **À FAIRE** : récupérer les `spaceId` Skedda pour Mars/Mercury/Earth/Jupiter (Venus=1117995 supposé)
-- [ ] Test runtime end-to-end : meeting Calendar → booking pending → Skedda success → SMS reçu
-- [ ] Cron interne pour traiter pendingBookings (window > 10j) + renouvellement watches
-
-### Phase 4 — Notifications
-- [ ] Module `lib/notify.ts` (interface unifiée : SMS + email + Slack)
-- [ ] SMS via EDJ Labs (déjà spec OK)
-- [ ] Email (en attente choix infra)
-- [ ] Slack stub (route + signature, désactivé)
-- [ ] Page `/action/reschedule?token=xxx` pour les liens magiques (décaler / annuler)
-
-### Phase 5 — Annulation / Déplacement (CODE ✅, RUNTIME À VALIDER)
-- [x] Détection event annulé dans webhook Calendar → annulation Skedda auto (`lib/release-booking.ts` + branch `event.status === "cancelled"` dans webhook)
-- [x] Bouton "Annuler" dans le dashboard avec server action + auth check (booking appartient au sales loggué)
-- [x] Jitter 80-250ms entre les requêtes Skedda pour discrétion
-- [ ] Test runtime end-to-end : annuler meeting Calendar → vérif Skedda libéré + audit log
-- [ ] Test runtime : bouton "Annuler" dashboard fonctionne
-- [ ] **PHASE 6 / V2** : détection déplacement (start.dateTime change) → cancel old + re-book. Pour l'instant si le sales déplace, l'ancienne salle reste bloquée et la nouvelle date n'est pas re-bookée — le sales devra annuler manuellement et recréer le meeting.
-
-### Phase 6 — Déploiement
-- [ ] DNS Cloudflare : A record `rooms` → 79.137.79.153 (DNS only)
-- [ ] Image rendue publique sur GHCR
-- [ ] Stack EDJ Labs avec les 10 Deploy Labels Traefik
-- [ ] `git tag v0.1.0 && git push --tags`
-- [ ] Vérifier `https://roombooker.nmt.ovh` répond
-- [ ] Test end-to-end avec 1 sales pilote
+- **EDJ Labs SMS API down** (côté provider, confirmé). Quand ça revient, on retentera.
+- **Brevo email sender** : pas encore vérifié côté Brevo dashboard.
 
 ---
 
-## Blockers actuels
-- **Email d'expéditeur Brevo** : doit être vérifié dans le dashboard Brevo avant que l'envoi marche. Action côté user.
+## 📌 Décisions clés
 
-## Décisions
-- **Pas de Slack pour MVP** : code préparé, désactivé via env var, à activer quand admin Slack sera autorisé
-- **Tokens OAuth chiffrés** AES-256-GCM (Calendar = données confidentielles)
-- **Skedda annulable** : confirmé par le user, on capture le lien d'annulation Skedda lors du booking
-- **Telephone obligatoire** Skedda → demandé au formulaire d'onboarding une seule fois
+- **HTTP pur > Playwright** : 50 MB RAM vs 400 MB. Skedda anti-CSRF cracké via `antiForgeryToken` retourné par `/venueusers`.
+- **Title Skedda = null** : aucun titre publié côté Skedda. firstName/lastName du sales conservés (non sensibles entre collègues).
+- **Email guest unique par (meeting, room)** : évite les "user already exists" lors des retries multi-salle.
+- **Slack désactivé MVP** : architecture prête, attente autorisation admin.
+- **Tokens OAuth chiffrés** : AES-256-GCM, clé en env var.
+- **Jitter 80-250ms** entre les requêtes Skedda pour discrétion.
