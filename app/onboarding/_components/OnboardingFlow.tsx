@@ -265,7 +265,7 @@ export function OnboardingFlow({
 
               <div className="onboard-secondary">
                 <h3 className="onboard-secondary-h">
-                  Et le nom de la salle dans Google Calendar ?
+                  Et le nom de la salle physique (Venus, Mars…) dans ton Google Calendar ?
                 </h3>
                 <div className="scope-toggle" role="radiogroup" aria-label="Affichage de la salle">
                   {(["location", "description", "none"] as const).map((m) => (
