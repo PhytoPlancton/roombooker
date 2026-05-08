@@ -645,6 +645,21 @@ a { color: inherit; }
   border-bottom: 1px solid var(--line);
   gap: 12px;
 }
+.card-header.card-header-title-only { border-bottom: none; padding-bottom: 8px; }
+.card-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px 14px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.card-controls > .chips { flex: 1 1 auto; min-width: 0; }
+.card-controls > .scope-toggle { flex: 0 0 auto; }
+@media (max-width: 720px) {
+  .card-controls > .scope-toggle { width: auto; align-self: flex-end; }
+}
 .card-title {
   font-size: 15px;
   font-weight: 600;

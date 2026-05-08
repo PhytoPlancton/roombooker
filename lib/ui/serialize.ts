@@ -14,6 +14,7 @@ export interface EventVM {
   end: string;   // HH:MM
   startISO: string;
   endISO: string;
+  updatedAtISO: string; // last status change — drives the "Récents" sort
   title: string;
   room: RoomName | null;
   organizer: string;
@@ -46,6 +47,7 @@ function classifyStatus(
 export function serializeBooking(b: BookingDoc, organizerName: string): EventVM {
   const startsAt = b.meeting.startsAt instanceof Date ? b.meeting.startsAt : new Date(b.meeting.startsAt);
   const endsAt = b.meeting.endsAt instanceof Date ? b.meeting.endsAt : new Date(b.meeting.endsAt);
+  const updatedAt = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
   const cls = classifyStatus(b.status, b.failureReason);
   return {
     id: b._id.toString(),
@@ -54,6 +56,7 @@ export function serializeBooking(b: BookingDoc, organizerName: string): EventVM 
     end: formatHHMM(endsAt),
     startISO: startsAt.toISOString(),
     endISO: endsAt.toISOString(),
+    updatedAtISO: updatedAt.toISOString(),
     title: b.meeting.title,
     room: b.room,
     organizer: organizerName,

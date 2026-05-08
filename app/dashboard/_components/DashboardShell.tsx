@@ -22,9 +22,21 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
   const router = useRouter();
   const [filterRoom, setFilterRoom] = useState<"all" | RoomName>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "issues">("all");
+  const [sortMode, setSortMode] = useState<"upcoming" | "recent">("upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
+
+  // Persist the sort choice across reloads (per browser).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("roombooker.meetingsSort");
+    if (saved === "recent" || saved === "upcoming") setSortMode(saved);
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("roombooker.meetingsSort", sortMode);
+  }, [sortMode]);
 
   // Auto-dismiss flash toast
   useEffect(() => {
@@ -60,13 +72,15 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
 
   const showToast = (text: string) => setToast(text);
 
-  // Show every active booking, sorted by date ascending (closest first)
   const filtered = useMemo(() => {
-    return events
+    const list = events
       .filter((e) => filterRoom === "all" || e.room === filterRoom)
-      .filter((e) => filterStatus === "all" || e.status === "conflict" || e.status === "error")
-      .sort((a, b) => (a.startISO > b.startISO ? 1 : -1));
-  }, [events, filterRoom, filterStatus]);
+      .filter((e) => filterStatus === "all" || e.status === "conflict" || e.status === "error");
+    if (sortMode === "recent") {
+      return list.sort((a, b) => (a.updatedAtISO > b.updatedAtISO ? -1 : 1));
+    }
+    return list.sort((a, b) => (a.startISO > b.startISO ? 1 : -1));
+  }, [events, filterRoom, filterStatus, sortMode]);
 
   const counts = useMemo(() => {
     const c = { synced: 0, syncing: 0, conflict: 0, error: 0 };
@@ -129,11 +143,13 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
 
         <div className="grid-main">
           <section className="card">
-            <header className="card-header">
+            <header className="card-header card-header-title-only">
               <h2 className="card-title">
                 <Icon.user size={14} /> Mes meetings synchronisés
                 <span className="card-title-count">{filtered.length}</span>
               </h2>
+            </header>
+            <div className="card-controls">
               <div className="chips">
                 <button
                   className="chip"
@@ -156,7 +172,31 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
                   </button>
                 ))}
               </div>
-            </header>
+              <div
+                className="scope-toggle"
+                role="tablist"
+                aria-label="Trier les meetings"
+              >
+                <button
+                  className="scope-btn"
+                  data-active={sortMode === "upcoming"}
+                  aria-pressed={sortMode === "upcoming"}
+                  onClick={() => setSortMode("upcoming")}
+                  type="button"
+                >
+                  À venir
+                </button>
+                <button
+                  className="scope-btn"
+                  data-active={sortMode === "recent"}
+                  aria-pressed={sortMode === "recent"}
+                  onClick={() => setSortMode("recent")}
+                  type="button"
+                >
+                  Récents
+                </button>
+              </div>
+            </div>
 
             <ul className="events">
               {filtered.map((e) => (
