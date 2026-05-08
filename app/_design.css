@@ -808,6 +808,7 @@ a { color: inherit; }
 .sync-badge.pending { background: var(--info-soft); color: var(--info); }
 .sync-badge.conflict { background: var(--warning-soft); color: var(--warning); }
 .sync-badge.error { background: var(--danger-soft); color: var(--danger); }
+.sync-badge.cancelled { background: var(--bg-soft); color: var(--ink-3); }
 
 .sync-badge .dot {
   width: 6px; height: 6px; border-radius: 999px;

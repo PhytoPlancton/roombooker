@@ -21,9 +21,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const userName = `${user.firstName} ${user.lastName}`.trim() || user.email;
   const bookings = await listBookingsForUser(user._id, 50);
-  const events: EventVM[] = bookings
-    .filter((b) => b.status !== "cancelled")
-    .map((b) => serializeBooking(b, userName));
+  const events: EventVM[] = bookings.map((b) => serializeBooking(b, userName));
 
   const watchActive = !!user.watchChannelId && !!user.watchExpiry && user.watchExpiry > new Date();
 

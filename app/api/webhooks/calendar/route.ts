@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 import { syncSince } from "@/lib/calendar";
 import { findUserByWatchChannelId, updateWatchSyncToken, type UserDoc } from "@/lib/users";
 import { shouldBookRoom } from "@/lib/booking-rules";
-import { createPendingBooking, findBookingByICalUID, deleteBookingByICalUID } from "@/lib/bookings";
+import { createPendingBooking, findBookingByICalUID, deleteBookingByICalUID, markBookingResult } from "@/lib/bookings";
 import { activateWatchForUser } from "@/lib/watch";
 import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
@@ -110,6 +110,15 @@ async function processChange(user: UserDoc): Promise<void> {
     // If the meeting was cancelled in Google Calendar, release the Skedda room.
     if (event.status === "cancelled") {
       const release = await releaseBookingByICalUIDAuto(event.iCalUID);
+      // Mark the booking as cancelled regardless of what the Skedda release
+      // returned. The user cancelled the meeting in Google Calendar — that's
+      // the source of truth. Without this, a previously-failed booking would
+      // stay visible as "Erreur" in the dashboard even though the meeting no
+      // longer exists. doRelease() only marks "cancelled" when the prior
+      // status was exactly "booked", so we cover the failed/pending cases here.
+      if (release.reason !== "not_found") {
+        await markBookingResult({ iCalUID: event.iCalUID, status: "cancelled" });
+      }
       await audit({
         action: "event_evaluated",
         userId: user._id,

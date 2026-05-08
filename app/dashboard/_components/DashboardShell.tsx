@@ -391,5 +391,12 @@ function SyncBadge({ status }: { status: EventVM["status"] }) {
         Erreur
       </span>
     );
+  if (status === "cancelled")
+    return (
+      <span className="sync-badge cancelled">
+        <Icon.x size={11} />
+        Annulé
+      </span>
+    );
   return null;
 }
