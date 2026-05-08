@@ -1163,23 +1163,40 @@ a { color: inherit; }
    Onboarding
 ========================= */
 .onboard {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
-@media (max-width: 880px) { .onboard { grid-template-columns: 1fr; } }
+@media (max-width: 880px) {
+  .onboard {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+}
 
 .onboard-form {
   padding: 56px 8% 48px;
   display: flex; flex-direction: column; justify-content: space-between;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 880px) {
+  .onboard-form { height: auto; overflow-y: visible; min-height: 100vh; }
 }
 .onboard-aside {
   background: var(--bg-soft);
   position: relative;
   overflow: hidden;
   border-left: 1px solid var(--line);
+  height: 100%;
+}
+@media (max-width: 880px) {
+  .onboard-aside { height: auto; }
 }
 [data-theme="joyful"] .onboard-aside {
   background: var(--brand);
