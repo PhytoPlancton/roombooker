@@ -464,17 +464,16 @@ function NotifsSection({
 
       <div className="settings-divider" />
 
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        <h3 className="settings-h-sub" style={{ margin: 0 }}>Affichage de la salle dans Google Calendar</h3>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+        <h3 className="settings-h-sub" style={{ margin: 0 }}>
+          Le nom de la salle physique (Venus, Mars…) dans ton Google Calendar ?
+        </h3>
         {savedHint && (
           <span style={{ fontSize: 12, color: "var(--success)" }}>
             <Icon.check size={11} /> enregistré
           </span>
         )}
       </div>
-      <p className="toggle-row-desc" style={{ marginBottom: 12 }}>
-        Quand on réserve une salle pour toi, où est-ce qu'on note son nom dans l'event Google Calendar ?
-      </p>
       <RadioRow
         name="loc-mode"
         value="location"
