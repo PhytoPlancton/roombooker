@@ -9,14 +9,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@types/three": "^0.184.1",
+    "date-fns": "^4.1.0",
+    "googleapis": "^144.0.0",
+    "iron-session": "^8.0.4",
+    "mongodb": "^6.10.0",
     "next": "^16.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "mongodb": "^6.10.0",
-    "googleapis": "^144.0.0",
-    "iron-session": "^8.0.4",
-    "zod": "^3.23.8",
-    "date-fns": "^4.1.0"
+    "three": "^0.184.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
