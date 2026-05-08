@@ -171,9 +171,14 @@
 
 .landing-hero-ctas {
   display: flex; gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
 }
+.landing-hero-ctas > .btn { flex: 0 0 auto; width: auto; }
 @media (max-width: 980px) { .landing-hero-ctas { justify-content: center; } }
+@media (max-width: 480px) {
+  .landing-hero-ctas { flex-wrap: wrap; }
+}
 
 .landing-hero-trust {
   margin-top: 28px;
