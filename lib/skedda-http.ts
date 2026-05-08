@@ -307,14 +307,20 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
     const { session, publicRegisterPayload } = await bootstrapSession();
 
     await step(args, "create_venueuser");
-    // Skedda dedupes guests by email at the venue level, so to retry a different room
-    // for the same meeting we need a *different* email per attempt. We include the room
-    // name in the seed: deterministic per (meeting, room) but unique across rooms.
+    // Skedda dedupes guests by email at the venue level, so we need a *different*
+    // email per booking attempt. The seed combines:
+    //   - iCalUID (stable per meeting)
+    //   - room name (changes when we retry on a different room)
+    //   - startsAt epoch (changes on reschedule — same meeting, same room, new time)
+    // Without the startsAt component, reschedules of the same meeting on the same
+    // room would reuse the previous attempt's venueuser, which Skedda rejects with
+    // an unrecognized error → reason "unknown" in the dashboard.
     const baseSeed = (args.iCalUID || `${args.email}-${args.startsAt.toISOString()}`)
       .replace(/[^a-zA-Z0-9]/g, "")
       .slice(0, 16)
       .toLowerCase();
-    const guestEmail = `rb-${baseSeed}-${args.room.toLowerCase()}@example.com`;
+    const startSeed = String(args.startsAt.getTime()).slice(-7);
+    const guestEmail = `rb-${baseSeed}-${args.room.toLowerCase()}-${startSeed}@example.com`;
 
     const { venueUserId, antiForgeryToken } = await createGuestVenueUser(session, publicRegisterPayload, {
       firstName: args.firstName, // real sales' first name (visible: "Nicolas M")
