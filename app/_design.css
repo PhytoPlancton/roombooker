@@ -1282,6 +1282,35 @@ a { color: inherit; }
   display: flex; justify-content: space-between;
 }
 
+.onboard-demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 0 16px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.onboard-demo-exit {
+  margin-left: auto;
+  text-decoration: underline;
+  font-size: 12px;
+  color: inherit;
+}
+.onboard-demo-exit:hover { opacity: 0.7; }
+
+.onboard-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+.onboard-rules .rule-row { font-size: 13px; }
+.onboard-rules .rule-row .input { font-size: 12px; padding: 6px 10px; }
+
 /* Aside illustration */
 .aside-content {
   position: absolute;

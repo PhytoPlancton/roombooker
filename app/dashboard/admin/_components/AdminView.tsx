@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/ui/Icon";
@@ -78,6 +79,9 @@ export function AdminView({ stats }: { stats: AdminStats }) {
             <span className="status-dot" />
             <span>Mis à jour {relTime(refreshedAt)}</span>
           </span>
+          <Link className="btn btn-ghost" href="/onboarding?demo=1" title="Rejoue l'onboarding sans rien sauvegarder">
+            <Icon.sparkle size={14} /> Simuler l'onboarding
+          </Link>
           <button className="btn btn-ghost" onClick={handleRefresh} disabled={isPending} type="button">
             <Icon.refresh size={14} /> Actualiser
           </button>

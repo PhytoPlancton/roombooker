@@ -15,7 +15,6 @@ interface TopnavProps {
 export function Topnav({ userName, syncedCount, isAdmin }: TopnavProps) {
   const pathname = usePathname();
   const isDash = pathname === "/dashboard";
-  const isRooms = pathname?.startsWith("/dashboard/rooms");
   const isSettings = pathname?.startsWith("/dashboard/settings");
   const isAdminPage = pathname?.startsWith("/dashboard/admin");
 
@@ -28,9 +27,6 @@ export function Topnav({ userName, syncedCount, isAdmin }: TopnavProps) {
       <nav className="topnav-tabs">
         <Link className="topnav-tab" href="/dashboard" aria-current={isDash ? "page" : undefined}>
           Dashboard
-        </Link>
-        <Link className="topnav-tab" href="/dashboard/rooms" aria-current={isRooms ? "page" : undefined}>
-          Salles
         </Link>
         <Link className="topnav-tab" href="/dashboard/settings" aria-current={isSettings ? "page" : undefined}>
           Réglages
