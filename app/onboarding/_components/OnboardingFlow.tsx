@@ -6,6 +6,8 @@ import { Icon } from "@/components/ui/Icon";
 import { saveOnboardingRules, saveTelephone } from "../actions";
 import { DEFAULT_BOOKING_RULES, type BookingRules } from "@/lib/users";
 
+type LocMode = "location" | "description" | "none";
+
 interface Props {
   userEmail: string;
   firstName: string;
@@ -13,8 +15,17 @@ interface Props {
   flashError: string | null;
   initialPhone?: string | null;
   initialRules?: BookingRules | null;
+  initialRoomLocationMode?: LocMode | null;
   demoMode?: boolean;
 }
+
+const LOC_HELPERS: Record<LocMode, string> = {
+  location: "Le nom de la salle apparaît à côté de la date dans l'invitation.",
+  description:
+    "On préfixe la description par « [Roombooker · Mars] ». Ton champ Lieu reste libre.",
+  none:
+    "On ne touche pas à l'event. La salle reste visible dans ton dashboard Roombooker.",
+};
 
 const ONBOARDING_DEFAULT_RULES: BookingRules = {
   externalAttendee: { enabled: true },
@@ -30,6 +41,7 @@ export function OnboardingFlow({
   flashError,
   initialPhone,
   initialRules,
+  initialRoomLocationMode,
   demoMode = false,
 }: Props) {
   // In demo mode: start at step 2 even if phone exists, so admin walks the whole flow.
@@ -38,6 +50,9 @@ export function OnboardingFlow({
   const [phoneCountry, setPhoneCountry] = useState("FR +33");
   const [rules, setRules] = useState<BookingRules>(
     initialRules ?? ONBOARDING_DEFAULT_RULES,
+  );
+  const [locMode, setLocMode] = useState<LocMode>(
+    initialRoomLocationMode ?? "location",
   );
   const [error, setError] = useState<string | null>(flashError);
   const [isPending, startTransition] = useTransition();
@@ -70,7 +85,7 @@ export function OnboardingFlow({
       return;
     }
     startTransition(async () => {
-      await saveOnboardingRules(rules);
+      await saveOnboardingRules({ rules, roomLocationMode: locMode });
       setStep(4);
     });
   };
@@ -78,25 +93,25 @@ export function OnboardingFlow({
   const fullName = [firstName, lastName].filter(Boolean).join(" ");
 
   return (
-    <div className="onboard">
+    <>
+      {demoMode && (
+        <div className="onboard-demo-banner" role="status">
+          <Icon.sparkle size={12} /> Mode démo — aucune donnée enregistrée.{" "}
+          <button
+            className="onboard-demo-exit"
+            onClick={() => router.push("/dashboard/admin")}
+            type="button"
+          >
+            Quitter la démo
+          </button>
+        </div>
+      )}
+      <div className="onboard" data-demo={demoMode || undefined}>
       <div className="onboard-form">
         <div className="onboard-brand">
           <div className="brand-dot">R</div>
           <span className="brand-name">roombooker</span>
         </div>
-
-        {demoMode && (
-          <div className="onboard-demo-banner">
-            <Icon.sparkle size={12} /> Mode démo — aucune donnée enregistrée.{" "}
-            <button
-              className="onboard-demo-exit"
-              onClick={() => router.push("/dashboard/admin")}
-              type="button"
-            >
-              Quitter la démo
-            </button>
-          </div>
-        )}
 
         <div className="onboard-content">
           <div className="steps">
@@ -248,6 +263,28 @@ export function OnboardingFlow({
                 />
               </div>
 
+              <div className="onboard-secondary">
+                <h3 className="onboard-secondary-h">
+                  Et le nom de la salle dans Google Calendar ?
+                </h3>
+                <div className="scope-toggle" role="radiogroup" aria-label="Affichage de la salle">
+                  {(["location", "description", "none"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={locMode === m}
+                      data-active={locMode === m}
+                      className="scope-btn"
+                      onClick={() => setLocMode(m)}
+                    >
+                      {m === "location" ? "Lieu" : m === "description" ? "Description" : "Nulle part"}
+                    </button>
+                  ))}
+                </div>
+                <p className="onboard-secondary-help">{LOC_HELPERS[locMode]}</p>
+              </div>
+
               <button
                 className="btn btn-primary btn-big"
                 disabled={isPending}
@@ -360,7 +397,8 @@ export function OnboardingFlow({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -33,6 +33,7 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
       flashError={error || null}
       initialPhone={canDemo ? user.telephone : null}
       initialRules={canDemo ? user.bookingRules ?? null : null}
+      initialRoomLocationMode={canDemo ? user.roomLocationMode ?? null : null}
       demoMode={canDemo}
     />
   );

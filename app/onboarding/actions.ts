@@ -1,7 +1,7 @@
 "use server";
 
 import { requireUser } from "@/lib/session";
-import { setBookingRules, setTelephone, type BookingRules } from "@/lib/users";
+import { setBookingRules, setRoomLocationMode, setTelephone, type BookingRules } from "@/lib/users";
 
 function normalizeTelephone(raw: string): string | null {
   const digits = raw.replace(/[\s.\-_()]/g, "");
@@ -28,8 +28,12 @@ export async function saveTelephone(formData: FormData): Promise<SaveTelephoneRe
   return { ok: true };
 }
 
-export async function saveOnboardingRules(rules: BookingRules): Promise<{ ok: boolean }> {
+export async function saveOnboardingRules(args: {
+  rules: BookingRules;
+  roomLocationMode: "location" | "description" | "none";
+}): Promise<{ ok: boolean }> {
   const { userId } = await requireUser();
-  await setBookingRules(userId, rules);
+  await setBookingRules(userId, args.rules);
+  await setRoomLocationMode(userId, args.roomLocationMode);
   return { ok: true };
 }
