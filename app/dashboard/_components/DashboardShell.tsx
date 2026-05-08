@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { isToday, isThisWeek, startOfDay } from "date-fns";
 import { Icon } from "@/components/ui/Icon";
 import { ROOMS, roomById } from "@/lib/ui/rooms";
 import { durationLabel, shortDayLabel } from "@/lib/ui/format";
@@ -23,6 +24,8 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
   const [filterRoom, setFilterRoom] = useState<"all" | RoomName>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "issues">("all");
   const [sortMode, setSortMode] = useState<"upcoming" | "recent">("upcoming");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(20);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
@@ -72,15 +75,50 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
 
   const showToast = (text: string) => setToast(text);
 
-  const filtered = useMemo(() => {
-    const list = events
+  const baseFiltered = useMemo(() => {
+    return events
       .filter((e) => filterRoom === "all" || e.room === filterRoom)
       .filter((e) => filterStatus === "all" || e.status === "conflict" || e.status === "error");
-    if (sortMode === "recent") {
-      return list.sort((a, b) => (a.updatedAtISO > b.updatedAtISO ? -1 : 1));
+  }, [events, filterRoom, filterStatus]);
+
+  // "À venir" view: upcoming non-cancelled bucketed by Today / This week / Later,
+  // and the past+cancelled list disclosed via "Voir l'historique".
+  const grouped = useMemo(() => {
+    const todayStart = startOfDay(new Date());
+    const upcoming = baseFiltered
+      .filter((e) => e.status !== "cancelled" && new Date(e.startISO) >= todayStart)
+      .sort((a, b) => (a.startISO > b.startISO ? 1 : -1));
+    const todays: EventVM[] = [];
+    const thisWeek: EventVM[] = [];
+    const later: EventVM[] = [];
+    for (const e of upcoming) {
+      const d = new Date(e.startISO);
+      if (isToday(d)) todays.push(e);
+      else if (isThisWeek(d, { weekStartsOn: 1 })) thisWeek.push(e);
+      else later.push(e);
     }
-    return list.sort((a, b) => (a.startISO > b.startISO ? 1 : -1));
-  }, [events, filterRoom, filterStatus, sortMode]);
+    const history = baseFiltered
+      .filter((e) => e.status === "cancelled" || new Date(e.startISO) < todayStart)
+      .sort((a, b) => (a.startISO > b.startISO ? -1 : 1));
+    return { todays, thisWeek, later, history, upcomingCount: upcoming.length };
+  }, [baseFiltered]);
+
+  // "Récents" view: flat list ordered by last activity.
+  const recentSorted = useMemo(() => {
+    return [...baseFiltered].sort((a, b) => (a.updatedAtISO > b.updatedAtISO ? -1 : 1));
+  }, [baseFiltered]);
+
+  const issuesCount = useMemo(() => {
+    return baseFiltered.filter((e) => e.status === "conflict" || e.status === "error").length;
+  }, [baseFiltered]);
+
+  // When there's nothing upcoming, auto-disclose the history so the user
+  // doesn't stare at an empty card.
+  useEffect(() => {
+    if (sortMode === "upcoming" && grouped.upcomingCount === 0 && grouped.history.length > 0) {
+      setHistoryOpen(true);
+    }
+  }, [sortMode, grouped.upcomingCount, grouped.history.length]);
 
   const counts = useMemo(() => {
     const c = { synced: 0, syncing: 0, conflict: 0, error: 0 };
@@ -146,7 +184,14 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
             <header className="card-header card-header-title-only">
               <h2 className="card-title">
                 <Icon.user size={14} /> Mes meetings synchronisés
-                <span className="card-title-count">{filtered.length}</span>
+                {sortMode === "upcoming" ? (
+                  <span className="card-title-count">
+                    {grouped.upcomingCount} à venir
+                    {issuesCount > 0 && ` · ${issuesCount} ⚠`}
+                  </span>
+                ) : (
+                  <span className="card-title-count">{recentSorted.length}</span>
+                )}
               </h2>
             </header>
             <div className="card-controls">
@@ -199,21 +244,118 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
             </div>
 
             <ul className="events">
-              {filtered.map((e) => (
-                <EventRow
-                  key={e.id}
-                  event={e}
-                  selected={e.id === selectedId && drawerOpen}
-                  onClick={() => {
-                    setSelectedId(e.id);
-                    setDrawerOpen(true);
-                  }}
-                />
-              ))}
-              {filtered.length === 0 && (
-                <li style={{ padding: "60px 20px", textAlign: "center", color: "var(--ink-3)", fontSize: 14 }}>
-                  Aucun meeting sur ce jour.
-                </li>
+              {sortMode === "upcoming" ? (
+                <>
+                  {grouped.upcomingCount === 0 && (
+                    <li className="events-empty-banner">
+                      Aucun meeting à venir. Voici tes derniers synchronisés.
+                    </li>
+                  )}
+                  {grouped.todays.length > 0 && (
+                    <li className="events-section-h">Aujourd'hui · {grouped.todays.length}</li>
+                  )}
+                  {grouped.todays.map((e) => (
+                    <EventRow
+                      key={e.id}
+                      event={e}
+                      selected={e.id === selectedId && drawerOpen}
+                      onClick={() => {
+                        setSelectedId(e.id);
+                        setDrawerOpen(true);
+                      }}
+                    />
+                  ))}
+                  {grouped.thisWeek.length > 0 && (
+                    <li className="events-section-h">Cette semaine · {grouped.thisWeek.length}</li>
+                  )}
+                  {grouped.thisWeek.map((e) => (
+                    <EventRow
+                      key={e.id}
+                      event={e}
+                      selected={e.id === selectedId && drawerOpen}
+                      onClick={() => {
+                        setSelectedId(e.id);
+                        setDrawerOpen(true);
+                      }}
+                    />
+                  ))}
+                  {grouped.later.length > 0 && (
+                    <li className="events-section-h">Plus tard · {grouped.later.length}</li>
+                  )}
+                  {grouped.later.map((e) => (
+                    <EventRow
+                      key={e.id}
+                      event={e}
+                      selected={e.id === selectedId && drawerOpen}
+                      onClick={() => {
+                        setSelectedId(e.id);
+                        setDrawerOpen(true);
+                      }}
+                    />
+                  ))}
+                  {grouped.history.length > 0 && (
+                    <li className="events-disclosure-wrap">
+                      <button
+                        className="events-disclosure"
+                        onClick={() => setHistoryOpen((o) => !o)}
+                        type="button"
+                        aria-expanded={historyOpen}
+                      >
+                        <Icon.chevR
+                          size={12}
+                        />
+                        <span>
+                          {historyOpen
+                            ? "Masquer l'historique"
+                            : `Voir l'historique (${grouped.history.length})`}
+                        </span>
+                      </button>
+                    </li>
+                  )}
+                  {historyOpen &&
+                    grouped.history.slice(0, historyLimit).map((e) => (
+                      <EventRow
+                        key={e.id}
+                        event={e}
+                        past
+                        selected={e.id === selectedId && drawerOpen}
+                        onClick={() => {
+                          setSelectedId(e.id);
+                          setDrawerOpen(true);
+                        }}
+                      />
+                    ))}
+                  {historyOpen && grouped.history.length > historyLimit && (
+                    <li>
+                      <button
+                        className="events-load-more"
+                        onClick={() => setHistoryLimit((l) => l + 20)}
+                        type="button"
+                      >
+                        Voir plus
+                      </button>
+                    </li>
+                  )}
+                </>
+              ) : (
+                <>
+                  {recentSorted.map((e) => (
+                    <EventRow
+                      key={e.id}
+                      event={e}
+                      selected={e.id === selectedId && drawerOpen}
+                      onClick={() => {
+                        setSelectedId(e.id);
+                        setDrawerOpen(true);
+                      }}
+                    />
+                  ))}
+                  {recentSorted.length === 0 && (
+                    <li style={{ padding: "60px 20px", textAlign: "center", color: "var(--ink-3)", fontSize: 14 }}>
+                      Aucun meeting.
+                    </li>
+                  )}
+                </>
               )}
             </ul>
           </section>
@@ -359,10 +501,10 @@ function Spark({ color, pattern }: { color: string; pattern: "up" | "flat" | "di
   );
 }
 
-function EventRow({ event, selected, onClick }: { event: EventVM; selected: boolean; onClick: () => void }) {
+function EventRow({ event, selected, onClick, past }: { event: EventVM; selected: boolean; onClick: () => void; past?: boolean }) {
   const room = event.room ? roomById(event.room) : null;
   return (
-    <li className="event" data-selected={selected} onClick={onClick}>
+    <li className="event" data-selected={selected} data-past={past || undefined} onClick={onClick}>
       <div className="event-time">
         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
           {shortDayLabel(new Date(event.startISO))}
