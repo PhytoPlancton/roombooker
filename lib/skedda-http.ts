@@ -362,12 +362,14 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
   }
 }
 
+export type CancelFailReason = "locked_in" | "not_found" | "unknown";
+
 /** Cancel a previously-created booking. Requires the cookies + cancelToken returned from bookSkeddaHttp. */
 export async function cancelSkeddaBookingHttp(args: {
   skeddaBookingId: string;
   cancelToken: string;
   cookies: string;
-}): Promise<{ success: boolean; errorMessage?: string }> {
+}): Promise<{ success: boolean; reason?: CancelFailReason; errorMessage?: string }> {
   try {
     const resp = await fetch(`${SKEDDA_BASE}/bookings/${args.skeddaBookingId}`, {
       method: "DELETE",
@@ -382,8 +384,12 @@ export async function cancelSkeddaBookingHttp(args: {
     });
     if (resp.status === 204 || resp.ok) return { success: true };
     const text = await resp.text().catch(() => "");
-    return { success: false, errorMessage: `${resp.status}: ${text.slice(0, 200)}` };
+    const lower = text.toLowerCase();
+    let reason: CancelFailReason = "unknown";
+    if (lower.includes("locked in")) reason = "locked_in";
+    else if (resp.status === 404 || lower.includes("not found")) reason = "not_found";
+    return { success: false, reason, errorMessage: `${resp.status}: ${text.slice(0, 200)}` };
   } catch (err) {
-    return { success: false, errorMessage: err instanceof Error ? err.message : "unknown" };
+    return { success: false, reason: "unknown", errorMessage: err instanceof Error ? err.message : "unknown" };
   }
 }

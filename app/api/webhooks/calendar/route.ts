@@ -134,11 +134,14 @@ async function processChange(user: UserDoc): Promise<void> {
           releaseReason: release.reason,
         },
       });
-      // Confirm to the user via their booking_success channels — we only fire
-      // when we actually released a real Skedda booking (release.ok). For
-      // failed/pending bookings there was nothing to release on Skedda, so
-      // sending an SMS would be misleading.
-      if (release.ok && priorBooking && priorBooking.room) {
+      // Confirm to the user — three cases when there *was* a Skedda booking:
+      //   - release.ok                  : Skedda released cleanly → success notif
+      //   - release.reason "locked_in"  : Skedda refuses (créneau proche/commencé)
+      //                                   → mark cancelled in our DB (Calendar intent
+      //                                     is the source of truth) AND warn via
+      //                                     booking_failure channels to contact venue admin
+      //   - other failures              : already audited; we don't spam the user
+      if (priorBooking && priorBooking.room) {
         const time = priorBooking.meeting.startsAt.toLocaleString("fr-FR", {
           weekday: "short",
           day: "2-digit",
@@ -147,24 +150,50 @@ async function processChange(user: UserDoc): Promise<void> {
           minute: "2-digit",
           timeZone: "Europe/Paris",
         });
-        await notifyUser({
-          user: {
-            _id: user._id,
-            email: user.email,
-            firstName: user.firstName,
-            telephone: user.telephone,
-            notifPrefs: user.notifPrefs,
-          },
-          type: "booking_success",
-          iCalUID: event.iCalUID,
-          smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} annulee (meeting supprime dans Calendar).`,
-          emailSubject: `Salle ${priorBooking.room} libérée — ${time}`,
-          emailHtml: `
-            <p>Bonjour ${user.firstName},</p>
-            <p>Tu as supprimé ton meeting dans Google Calendar — la salle <strong>${priorBooking.room}</strong> est libérée sur Skedda.</p>
-            <p>🕐 ${time}</p>
-          `,
-        });
+        if (release.ok) {
+          await notifyUser({
+            user: {
+              _id: user._id,
+              email: user.email,
+              firstName: user.firstName,
+              telephone: user.telephone,
+              notifPrefs: user.notifPrefs,
+            },
+            type: "booking_success",
+            iCalUID: event.iCalUID,
+            smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} annulee (meeting supprime dans Calendar).`,
+            emailSubject: `Salle ${priorBooking.room} libérée — ${time}`,
+            emailHtml: `
+              <p>Bonjour ${user.firstName},</p>
+              <p>Tu as supprimé ton meeting dans Google Calendar — la salle <strong>${priorBooking.room}</strong> est libérée sur Skedda.</p>
+              <p>🕐 ${time}</p>
+            `,
+          });
+        } else if (release.reason === "locked_in") {
+          // Skedda's lock kicks in for close-to-start bookings. The Calendar event
+          // is gone, our DB should reflect that — but the sales needs to know
+          // the room is still held on Skedda and only an admin can release it.
+          await markBookingResult({ iCalUID: event.iCalUID, status: "cancelled" });
+          await notifyUser({
+            user: {
+              _id: user._id,
+              email: user.email,
+              firstName: user.firstName,
+              telephone: user.telephone,
+              notifPrefs: user.notifPrefs,
+            },
+            type: "booking_failure",
+            iCalUID: event.iCalUID,
+            smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} verrouillee par Skedda. Contacte l'admin Antler pour la liberer.`,
+            emailSubject: `Salle ${priorBooking.room} verrouillée sur Skedda — ${time}`,
+            emailHtml: `
+              <p>Bonjour ${user.firstName},</p>
+              <p>Tu as supprimé ton meeting <strong>"${priorBooking.meeting.title}"</strong> dans Google Calendar (${time}).</p>
+              <p>Skedda refuse l'annulation automatique car le créneau est trop proche ou déjà commencé. <strong>Tu dois contacter un admin du venue Antler</strong> pour libérer la salle <strong>${priorBooking.room}</strong>.</p>
+              <p>Ton dashboard Roombooker affiche maintenant cette résa comme "Annulée" — pas besoin de revenir dessus côté app.</p>
+            `,
+          });
+        }
       }
       continue;
     }

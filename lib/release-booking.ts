@@ -17,7 +17,8 @@ interface ReleaseResult {
     | "wrong_user"
     | "not_active"
     | "missing_cancel_creds"
-    | "skedda_error";
+    | "skedda_error"
+    | "locked_in";
   errorMessage?: string;
 }
 
@@ -44,9 +45,13 @@ async function doRelease(booking: BookingDoc, source: "dashboard" | "calendar_ca
         where: "release_booking",
         source,
         skeddaBookingRef: booking.skeddaBookingRef,
+        skeddaReason: result.reason,
         errorMessage: result.errorMessage,
       },
     });
+    if (result.reason === "locked_in") {
+      return { ok: false, reason: "locked_in", errorMessage: result.errorMessage };
+    }
     return { ok: false, reason: "skedda_error", errorMessage: result.errorMessage };
   }
 

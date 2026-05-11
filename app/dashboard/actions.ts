@@ -117,6 +117,12 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   if (result.ok) {
     redirect("/dashboard?success=cancelled");
   }
+  if (result.reason === "locked_in") {
+    const msg = encodeURIComponent(
+      "Skedda a verrouillé cette résa (créneau trop proche ou déjà commencé). Contacte l'admin du venue Antler pour annuler.",
+    );
+    redirect(`/dashboard?error=${msg}`);
+  }
   const reason = encodeURIComponent(result.errorMessage || result.reason || "unknown");
   redirect(`/dashboard?error=${reason}`);
 }
