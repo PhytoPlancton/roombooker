@@ -4,6 +4,7 @@ import { syncSince } from "@/lib/calendar";
 import { findUserByWatchChannelId, updateWatchSyncToken, type UserDoc } from "@/lib/users";
 import { shouldBookRoom } from "@/lib/booking-rules";
 import { createPendingBooking, findBookingByICalUID, deleteBookingByICalUID, markBookingResult } from "@/lib/bookings";
+import { notifyUser } from "@/lib/notify";
 import { activateWatchForUser } from "@/lib/watch";
 import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
@@ -109,6 +110,9 @@ async function processChange(user: UserDoc): Promise<void> {
 
     // If the meeting was cancelled in Google Calendar, release the Skedda room.
     if (event.status === "cancelled") {
+      // Snapshot the booking BEFORE releasing — releaseBookingByICalUIDAuto will
+      // mark it cancelled and we want to recap the room/time in the SMS.
+      const priorBooking = await findBookingByICalUID(event.iCalUID);
       const release = await releaseBookingByICalUIDAuto(event.iCalUID);
       // Mark the booking as cancelled regardless of what the Skedda release
       // returned. The user cancelled the meeting in Google Calendar — that's
@@ -130,6 +134,38 @@ async function processChange(user: UserDoc): Promise<void> {
           releaseReason: release.reason,
         },
       });
+      // Confirm to the user via their booking_success channels — we only fire
+      // when we actually released a real Skedda booking (release.ok). For
+      // failed/pending bookings there was nothing to release on Skedda, so
+      // sending an SMS would be misleading.
+      if (release.ok && priorBooking && priorBooking.room) {
+        const time = priorBooking.meeting.startsAt.toLocaleString("fr-FR", {
+          weekday: "short",
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Europe/Paris",
+        });
+        await notifyUser({
+          user: {
+            _id: user._id,
+            email: user.email,
+            firstName: user.firstName,
+            telephone: user.telephone,
+            notifPrefs: user.notifPrefs,
+          },
+          type: "booking_success",
+          iCalUID: event.iCalUID,
+          smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} annulee (meeting supprime dans Calendar).`,
+          emailSubject: `Salle ${priorBooking.room} libérée — ${time}`,
+          emailHtml: `
+            <p>Bonjour ${user.firstName},</p>
+            <p>Tu as supprimé ton meeting dans Google Calendar — la salle <strong>${priorBooking.room}</strong> est libérée sur Skedda.</p>
+            <p>🕐 ${time}</p>
+          `,
+        });
+      }
       continue;
     }
 
