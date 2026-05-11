@@ -442,6 +442,15 @@ function NotifsSection({
           hasPhone={!!telephone}
         />
         <NotifTypeCard
+          title="Réservation annulée"
+          desc="Quand tu supprimes un meeting dans Calendar et qu'on libère la salle sur Skedda."
+          smsOn={prefs.booking_cancelled.sms}
+          emailOn={prefs.booking_cancelled.email}
+          onSms={(v) => updatePref("booking_cancelled", "sms", v)}
+          onEmail={(v) => updatePref("booking_cancelled", "email", v)}
+          hasPhone={!!telephone}
+        />
+        <NotifTypeCard
           title="Conflit ou erreur"
           desc="Deux meetings sur la même salle, sync cassée, token expiré."
           smsOn={prefs.booking_failure.sms}

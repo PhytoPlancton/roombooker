@@ -159,7 +159,7 @@ async function processChange(user: UserDoc): Promise<void> {
               telephone: user.telephone,
               notifPrefs: user.notifPrefs,
             },
-            type: "booking_success",
+            type: "booking_cancelled",
             iCalUID: event.iCalUID,
             smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} annulee (meeting supprime dans Calendar).`,
             emailSubject: `Salle ${priorBooking.room} libérée — ${time}`,
