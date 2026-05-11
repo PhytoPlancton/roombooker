@@ -218,15 +218,39 @@ export function EventDrawer({ event, open, onClose, cancelAction, onActionToast 
             Forcer la synchro
           </button>
           <div style={{ flex: 1 }} />
-          {event.status === "synced" && (
-            <form action={cancelAction}>
-              <input type="hidden" name="bookingId" value={event.bookingDocId} />
-              <button className="btn btn-danger" type="submit">
-                <Icon.unlink size={14} />
-                Annuler la résa
-              </button>
-            </form>
-          )}
+          {event.status === "synced" && (() => {
+            // Skedda's "locked in" rule: bookings too close to start (or already
+            // started) can't be cancelled online. We use a 30-min cushion as a
+            // safe default for Antler — if the venue tightens/loosens this, we
+            // err on the conservative side here so the user never hits a 422.
+            const startsAt = new Date(event.startISO).getTime();
+            const now = Date.now();
+            const minutesToStart = (startsAt - now) / 60000;
+            const inProgress = now >= startsAt && now < new Date(event.endISO).getTime();
+            const lockedClose = minutesToStart > 0 && minutesToStart < 30;
+            const finished = now >= new Date(event.endISO).getTime();
+            if (inProgress || lockedClose || finished) {
+              return (
+                <div className="cancel-locked" title="Skedda verrouille les résas dont le créneau est trop proche ou commencé.">
+                  <Icon.alert size={12} />
+                  {finished
+                    ? "Meeting terminé"
+                    : inProgress
+                      ? "Meeting en cours — verrouillé par Skedda"
+                      : `Verrouillé dans ${Math.round(minutesToStart)} min`}
+                </div>
+              );
+            }
+            return (
+              <form action={cancelAction}>
+                <input type="hidden" name="bookingId" value={event.bookingDocId} />
+                <button className="btn btn-danger" type="submit">
+                  <Icon.unlink size={14} />
+                  Annuler la résa
+                </button>
+              </form>
+            );
+          })()}
           <a className="btn btn-primary" href="https://antlerfrance.skedda.com/booking" target="_blank" rel="noopener noreferrer">
             Ouvrir dans Skedda <Icon.arrow size={14} />
           </a>
