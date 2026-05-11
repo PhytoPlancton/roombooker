@@ -228,27 +228,33 @@ export function EventDrawer({ event, open, onClose, cancelAction, onActionToast 
             const inProgress = now >= startsAt && !finished;
             const lockedClose = minutesToStart > 0 && minutesToStart < 30;
             const locked = inProgress || lockedClose || finished;
-            const lockHint = finished
+            const lockedLabel = finished
               ? "Meeting terminé"
               : inProgress
-                ? "Meeting en cours — verrouillé par Skedda"
-                : `Skedda verrouille dans ${Math.round(minutesToStart)} min`;
+                ? "Meeting en cours"
+                : `Verrouillé · ${Math.round(minutesToStart)} min`;
             return (
-              <div className="cancel-block">
-                <form action={cancelAction}>
-                  <input type="hidden" name="bookingId" value={event.bookingDocId} />
-                  <button
-                    className="btn btn-danger"
-                    type="submit"
-                    disabled={locked}
-                    title={locked ? lockHint : undefined}
-                  >
-                    <Icon.unlink size={14} />
-                    Annuler la résa
-                  </button>
-                </form>
-                {locked && <small className="cancel-locked-hint">{lockHint}</small>}
-              </div>
+              <form action={cancelAction}>
+                <input type="hidden" name="bookingId" value={event.bookingDocId} />
+                <button
+                  className="btn btn-danger"
+                  type="submit"
+                  disabled={locked}
+                  title={locked ? "Skedda verrouille les annulations ~30 min avant le début et pendant le meeting." : undefined}
+                >
+                  {locked ? (
+                    <>
+                      {!finished && <span aria-hidden>🔒</span>}
+                      {lockedLabel}
+                    </>
+                  ) : (
+                    <>
+                      <Icon.unlink size={14} />
+                      Annuler la résa
+                    </>
+                  )}
+                </button>
+              </form>
             );
           })()}
           <a className="btn btn-primary" href="https://antlerfrance.skedda.com/booking" target="_blank" rel="noopener noreferrer">
