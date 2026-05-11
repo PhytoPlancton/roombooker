@@ -73,6 +73,7 @@ export default async function CancelMagicPage({ params, searchParams }: PageProp
     month: "long",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Paris",
   });
 
   return wrap(

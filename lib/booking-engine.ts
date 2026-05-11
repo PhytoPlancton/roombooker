@@ -59,10 +59,12 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     const meetingDateFr = args.meeting.startsAt.toLocaleDateString("fr-FR", {
       day: "2-digit",
       month: "long",
+      timeZone: "Europe/Paris",
     });
     const willTryDateFr = willTryAt.toLocaleDateString("fr-FR", {
       day: "2-digit",
       month: "long",
+      timeZone: "Europe/Paris",
     });
 
     await notifyUser({
@@ -225,6 +227,7 @@ async function notifySuccess(
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Paris",
   });
   const base = (process.env.PUBLIC_APP_URL || "https://roombooker.nmt.ovh").replace(/\/$/, "");
   const cancelUrl = `${base}/c/${signCancelToken(bookingDocId.toString())}`;
@@ -258,6 +261,7 @@ async function notifyFailure(user: UserDoc, args: ProcessBookingArgs, reasonText
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Paris",
   });
   await notifyUser({
     user: {
