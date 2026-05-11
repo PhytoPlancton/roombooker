@@ -114,7 +114,10 @@ export async function notifyUser(args: {
   emailHtml: string;
 }): Promise<void> {
   const { user, type, smsText, emailSubject, emailHtml, iCalUID } = args;
-  const prefs = (user.notifPrefs ?? DEFAULT_NOTIF_PREFS)[type];
+  // Per-type fallback: if the user's stored prefs predate this type (e.g.
+  // booking_cancelled added in v0.10.14), fall back to the default for THAT
+  // type only — not the whole prefs object — so we never crash on missing keys.
+  const prefs = user.notifPrefs?.[type] ?? DEFAULT_NOTIF_PREFS[type];
 
   if (prefs.sms && user.telephone) {
     const r = await sendSms({ phoneNumber: user.telephone, text: smsText });
