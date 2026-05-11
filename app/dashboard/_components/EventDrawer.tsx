@@ -219,36 +219,36 @@ export function EventDrawer({ event, open, onClose, cancelAction, onActionToast 
           </button>
           <div style={{ flex: 1 }} />
           {event.status === "synced" && (() => {
-            // Skedda's "locked in" rule: bookings too close to start (or already
-            // started) can't be cancelled online. We use a 30-min cushion as a
-            // safe default for Antler — if the venue tightens/loosens this, we
-            // err on the conservative side here so the user never hits a 422.
+            // Skedda locks bookings too close to start (~30min cushion for safety).
             const startsAt = new Date(event.startISO).getTime();
+            const endsAt = new Date(event.endISO).getTime();
             const now = Date.now();
             const minutesToStart = (startsAt - now) / 60000;
-            const inProgress = now >= startsAt && now < new Date(event.endISO).getTime();
+            const finished = now >= endsAt;
+            const inProgress = now >= startsAt && !finished;
             const lockedClose = minutesToStart > 0 && minutesToStart < 30;
-            const finished = now >= new Date(event.endISO).getTime();
-            if (inProgress || lockedClose || finished) {
-              return (
-                <div className="cancel-locked" title="Skedda verrouille les résas dont le créneau est trop proche ou commencé.">
-                  <Icon.alert size={12} />
-                  {finished
-                    ? "Meeting terminé"
-                    : inProgress
-                      ? "Meeting en cours — verrouillé par Skedda"
-                      : `Verrouillé dans ${Math.round(minutesToStart)} min`}
-                </div>
-              );
-            }
+            const locked = inProgress || lockedClose || finished;
+            const lockHint = finished
+              ? "Meeting terminé"
+              : inProgress
+                ? "Meeting en cours — verrouillé par Skedda"
+                : `Skedda verrouille dans ${Math.round(minutesToStart)} min`;
             return (
-              <form action={cancelAction}>
-                <input type="hidden" name="bookingId" value={event.bookingDocId} />
-                <button className="btn btn-danger" type="submit">
-                  <Icon.unlink size={14} />
-                  Annuler la résa
-                </button>
-              </form>
+              <div className="cancel-block">
+                <form action={cancelAction}>
+                  <input type="hidden" name="bookingId" value={event.bookingDocId} />
+                  <button
+                    className="btn btn-danger"
+                    type="submit"
+                    disabled={locked}
+                    title={locked ? lockHint : undefined}
+                  >
+                    <Icon.unlink size={14} />
+                    Annuler la résa
+                  </button>
+                </form>
+                {locked && <small className="cancel-locked-hint">{lockHint}</small>}
+              </div>
             );
           })()}
           <a className="btn btn-primary" href="https://antlerfrance.skedda.com/booking" target="_blank" rel="noopener noreferrer">
