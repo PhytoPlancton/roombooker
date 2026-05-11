@@ -225,6 +225,10 @@ export function LandingPage({ flashError }: { flashError: string | null }) {
           <Link href="/privacy" style={{ color: "var(--ink-3)" }}>
             Privacy
           </Link>
+          {" · "}
+          <Link href="/terms" style={{ color: "var(--ink-3)" }}>
+            Terms
+          </Link>
           {" · © 2026 · Pour les Sales qui jonglent avec 5 salles"}
         </div>
       </footer>
