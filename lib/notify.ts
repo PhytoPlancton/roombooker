@@ -57,35 +57,29 @@ export async function sendSms(args: SmsArgs): Promise<{ success: boolean; error?
 }
 
 export async function sendEmail(args: EmailArgs): Promise<{ success: boolean; error?: string }> {
-  const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.BREVO_SENDER_EMAIL;
-  const senderName = process.env.BREVO_SENDER_NAME || "RoomBooker";
-
-  if (!apiKey) return { success: false, error: "BREVO_API_KEY missing" };
-  if (!senderEmail) {
-    console.warn("[email] BREVO_SENDER_EMAIL not set, skipping email");
-    return { success: false, error: "BREVO_SENDER_EMAIL missing" };
-  }
+  // EDJ Labs Emailing API. Sender is enforced server-side
+  // (postmaster@edj-labs.com); the display name is configured in the EDJ
+  // dashboard, not per-request.
+  const token = process.env.EDJ_EMAIL_API_TOKEN;
+  if (!token) return { success: false, error: "EDJ_EMAIL_API_TOKEN missing" };
 
   try {
-    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    const res = await fetch("https://api.edj-labs.com/email/send", {
       method: "POST",
       headers: {
-        "api-key": apiKey,
+        "X-Api-Token": token,
         "Content-Type": "application/json",
-        "Accept": "application/json",
       },
       body: JSON.stringify({
-        sender: { name: senderName, email: senderEmail },
-        to: [args.to],
+        recipients: [args.to.email],
         subject: args.subject,
-        htmlContent: args.htmlContent,
+        html: args.htmlContent,
       }),
     });
     if (!res.ok) {
       const body = await res.text();
-      console.error("[email] failed", { status: res.status, body });
-      return { success: false, error: `${res.status}: ${body}` };
+      console.error("[email] failed", { status: res.status, body: body.slice(0, 300) });
+      return { success: false, error: `${res.status}: ${body.slice(0, 200)}` };
     }
     return { success: true };
   } catch (err) {

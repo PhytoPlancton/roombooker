@@ -76,8 +76,8 @@ export async function activateWatchForUser(
       },
       type: "watch_resync",
       smsText: `RoomBooker: ${reason}. Aucune action requise.`,
-      emailSubject: "RoomBooker — surveillance Calendar re-initialisée",
-      emailHtml: `<p>Bonjour ${user.firstName},</p><p>${reason}. Tes futurs meetings continuent d'être bookés normalement, tu n'as rien à faire.</p>`,
+      emailSubject: "Surveillance Calendar réinitialisée",
+      emailHtml: `<p>${reason}. Rien à faire — les meetings continuent d'être bookés normalement.</p>`,
     });
   }
 }

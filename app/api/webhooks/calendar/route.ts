@@ -173,12 +173,8 @@ async function processChange(user: UserDoc): Promise<void> {
             type: "booking_cancelled",
             iCalUID,
             smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} annulee (meeting supprime dans Calendar).`,
-            emailSubject: `Salle ${priorBooking.room} libérée — ${time}`,
-            emailHtml: `
-              <p>Bonjour ${user.firstName},</p>
-              <p>Tu as supprimé ton meeting dans Google Calendar — la salle <strong>${priorBooking.room}</strong> est libérée sur Skedda.</p>
-              <p>🕐 ${time}</p>
-            `,
+            emailSubject: `${priorBooking.room} libérée · ${time}`,
+            emailHtml: `<p>Salle <strong>${priorBooking.room}</strong> libérée sur Skedda · ${time}.</p>`,
           });
         } else if (release.reason === "locked_in") {
           // Skedda's lock kicks in for close-to-start bookings. The Calendar event
@@ -196,13 +192,8 @@ async function processChange(user: UserDoc): Promise<void> {
             type: "booking_failure",
             iCalUID,
             smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} verrouillee par Skedda. Contacte l'admin Antler pour la liberer.`,
-            emailSubject: `Salle ${priorBooking.room} verrouillée sur Skedda — ${time}`,
-            emailHtml: `
-              <p>Bonjour ${user.firstName},</p>
-              <p>Tu as supprimé ton meeting <strong>"${priorBooking.meeting.title}"</strong> dans Google Calendar (${time}).</p>
-              <p>Skedda refuse l'annulation automatique car le créneau est trop proche ou déjà commencé. <strong>Tu dois contacter un admin du venue Antler</strong> pour libérer la salle <strong>${priorBooking.room}</strong>.</p>
-              <p>Ton dashboard Roombooker affiche maintenant cette résa comme "Annulée" — pas besoin de revenir dessus côté app.</p>
-            `,
+            emailSubject: `Action requise · ${priorBooking.room} verrouillée sur Skedda`,
+            emailHtml: `<p><strong>Action requise.</strong> Skedda refuse de libérer <strong>${priorBooking.room}</strong> (${time}) — créneau trop proche ou commencé.</p><p>Contacte un admin Antler pour libérer la salle. Le dashboard Roombooker affiche déjà la résa comme annulée.</p>`,
           });
         }
       }

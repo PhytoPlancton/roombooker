@@ -78,8 +78,8 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       type: "booking_success",
       iCalUID: args.iCalUID,
       smsText: `RoomBooker: meeting du ${meetingDateFr} hors fenetre Skedda (max 10j). Reservation auto le ${willTryDateFr}.`,
-      emailSubject: `RoomBooker — réservation différée pour le ${meetingDateFr}`,
-      emailHtml: `<p>Bonjour ${user.firstName},</p><p>Ton meeting du ${meetingDateFr} est trop loin pour Skedda (max 10 jours à l'avance). Je le réserverai automatiquement le <strong>${willTryDateFr}</strong>.</p><p>Aucune action de ta part — je m'en occupe.</p>`,
+      emailSubject: `Réservation différée — ${meetingDateFr}`,
+      emailHtml: `<p>Meeting du <strong>${meetingDateFr}</strong> hors fenêtre Skedda (10 j max).</p><p>Je le réserve auto le <strong>${willTryDateFr}</strong>. Rien à faire.</p>`,
     });
 
     await audit({
@@ -264,14 +264,8 @@ async function notifySuccess(
     type: "booking_success",
     iCalUID: args.iCalUID,
     smsText: `RoomBooker: salle ${room} reservee pour ${time}. Annuler: ${cancelUrl}`,
-    emailSubject: `Salle ${room} réservée — ${time}`,
-    emailHtml: `
-      <p>Bonjour ${user.firstName},</p>
-      <p>La salle <strong>${room}</strong> est réservée :</p>
-      <p>🕐 ${time}</p>
-      <p>L'event Google Calendar a été mis à jour avec la salle.</p>
-      <p><a href="${cancelUrl}">Annuler la réservation</a></p>
-    `,
+    emailSubject: `${room} bloquée · ${time}`,
+    emailHtml: `<p>Salle <strong>${room}</strong> bloquée sur Skedda · ${time}.</p><p><a href="${cancelUrl}">Annuler en 1 clic</a></p>`,
   });
 }
 
@@ -295,13 +289,7 @@ async function notifyFailure(user: UserDoc, args: ProcessBookingArgs, reasonText
     type: "booking_failure",
     iCalUID: args.iCalUID,
     smsText: `RoomBooker: echec resa pour "${args.meeting.title}" (${time}). ${reasonText}`,
-    emailSubject: `Échec de réservation pour ${args.meeting.title}`,
-    emailHtml: `
-      <p>Bonjour ${user.firstName},</p>
-      <p>Je n'ai pas pu réserver de salle pour :</p>
-      <p>📅 ${args.meeting.title}<br/>🕐 ${time}</p>
-      <p><strong>Raison</strong> : ${reasonText}</p>
-      <p>Tu peux réserver manuellement sur <a href="https://antlerfrance.skedda.com/booking">Skedda</a>.</p>
-    `,
+    emailSubject: `Échec réservation · ${args.meeting.title}`,
+    emailHtml: `<p>Pas de salle pour <strong>${args.meeting.title}</strong> · ${time}.</p><p>${reasonText}</p><p><a href="https://antlerfrance.skedda.com/booking">Réserver manuellement sur Skedda →</a></p>`,
   });
 }
