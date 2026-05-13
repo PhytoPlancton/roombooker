@@ -80,6 +80,14 @@ export interface UserDoc {
    *  - "none": don't touch the event at all
    */
   roomLocationMode?: "location" | "description" | "none";
+  /**
+   * Whether to share the Google meeting title on the Skedda booking (visible to
+   * other Antler France users).
+   *  - "none" (default): never send title, keeps the booking anonymous
+   *  - "anonymized": send a stripped-down generic title (e.g. "Demo client")
+   *  - "full": send the raw title verbatim
+   */
+  skeddaTitleMode?: "none" | "anonymized" | "full";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -189,6 +197,17 @@ export async function setRoomLocationMode(
   await col.updateOne(
     { _id: userId },
     { $set: { roomLocationMode: mode, updatedAt: new Date() } },
+  );
+}
+
+export async function setSkeddaTitleMode(
+  userId: ObjectId,
+  mode: "none" | "anonymized" | "full",
+): Promise<void> {
+  const col = await usersCol();
+  await col.updateOne(
+    { _id: userId },
+    { $set: { skeddaTitleMode: mode, updatedAt: new Date() } },
   );
 }
 

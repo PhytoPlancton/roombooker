@@ -11,6 +11,7 @@ import {
   setNotifPrefs,
   setRoomLocationMode,
   setRoomPriority,
+  setSkeddaTitleMode,
   setTelephone,
   type BookingRules,
   type NotifPrefs,
@@ -73,6 +74,17 @@ export async function saveRoomLocationModeAction(formData: FormData): Promise<{ 
   type Mode = typeof valid[number];
   const mode = (typeof raw === "string" && (valid as readonly string[]).includes(raw) ? raw : "location") as Mode;
   await setRoomLocationMode(userId, mode);
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+export async function saveSkeddaTitleModeAction(formData: FormData): Promise<{ ok: boolean }> {
+  const { userId } = await requireUser();
+  const raw = formData.get("mode");
+  const valid = ["none", "anonymized", "full"] as const;
+  type Mode = typeof valid[number];
+  const mode = (typeof raw === "string" && (valid as readonly string[]).includes(raw) ? raw : "none") as Mode;
+  await setSkeddaTitleMode(userId, mode);
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }

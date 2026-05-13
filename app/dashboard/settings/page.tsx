@@ -31,6 +31,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       rules={user.bookingRules ?? DEFAULT_BOOKING_RULES}
       priority={user.roomPriority ?? DEFAULT_ROOM_PRIORITY}
       roomLocationMode={user.roomLocationMode ?? "location"}
+      skeddaTitleMode={user.skeddaTitleMode ?? "none"}
       notifPrefs={{ ...DEFAULT_NOTIF_PREFS, ...(user.notifPrefs ?? {}) }}
       watchActive={watchActive}
       watchExpiryISO={watchExpiryISO}

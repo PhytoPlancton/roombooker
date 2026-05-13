@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
 import type { BookingRules, NotifPrefs } from "@/lib/users";
 import type { RoomName } from "@/lib/bookings";
-import { activateWatchAction, deactivateWatchAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction } from "../../actions";
+import { activateWatchAction, deactivateWatchAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction } from "../../actions";
 import { PriorityDnD } from "./PriorityDnD";
 import { PhoneEditor } from "./PhoneEditor";
 
@@ -21,6 +21,7 @@ interface Props {
   rules: BookingRules;
   priority: RoomName[];
   roomLocationMode: "location" | "description" | "none";
+  skeddaTitleMode: "none" | "anonymized" | "full";
   notifPrefs: NotifPrefs;
   watchActive: boolean;
   watchExpiryISO: string | null;
@@ -36,7 +37,7 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
-export function SettingsView({ user, rules, priority, roomLocationMode, notifPrefs, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, notifPrefs, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
   const searchParams = useSearchParams();
@@ -89,7 +90,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, notifPre
         <div className="settings-content">
           {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} watchExpiryISO={watchExpiryISO} />}
           {active === "rules" && <RulesSection rules={rules} priority={priority} />}
-          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} notifPrefs={notifPrefs} />}
+          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} skeddaTitleMode={skeddaTitleMode} notifPrefs={notifPrefs} />}
           {active === "account" && <AccountSection user={user} />}
         </div>
       </div>
@@ -366,17 +367,21 @@ function NotifsSection({
   telephone,
   email,
   mode,
+  skeddaTitleMode,
   notifPrefs,
 }: {
   telephone: string;
   email: string;
   mode: "location" | "description" | "none";
+  skeddaTitleMode: "none" | "anonymized" | "full";
   notifPrefs: NotifPrefs;
 }) {
   const [current, setCurrent] = useState<"location" | "description" | "none">(mode);
+  const [titleMode, setTitleMode] = useState<"none" | "anonymized" | "full">(skeddaTitleMode);
   const [prefs, setPrefs] = useState<NotifPrefs>(notifPrefs);
   const [, startTransition] = useTransition();
   const [savedHint, setSavedHint] = useState(false);
+  const [titleSavedHint, setTitleSavedHint] = useState(false);
   const [prefsSavedHint, setPrefsSavedHint] = useState(false);
 
   const handleChange = (next: "location" | "description" | "none") => {
@@ -387,6 +392,17 @@ function NotifsSection({
       await saveRoomLocationModeAction(fd);
       setSavedHint(true);
       setTimeout(() => setSavedHint(false), 1500);
+    });
+  };
+
+  const handleTitleChange = (next: "none" | "anonymized" | "full") => {
+    setTitleMode(next);
+    const fd = new FormData();
+    fd.set("mode", next);
+    startTransition(async () => {
+      await saveSkeddaTitleModeAction(fd);
+      setTitleSavedHint(true);
+      setTimeout(() => setTitleSavedHint(false), 1500);
     });
   };
 
@@ -470,6 +486,46 @@ function NotifsSection({
           hasPhone={!!telephone}
         />
       </div>
+
+      <div className="settings-divider" />
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+        <h3 className="settings-h-sub" style={{ margin: 0 }}>
+          Titre du meeting visible sur Skedda
+        </h3>
+        {titleSavedHint && (
+          <span style={{ fontSize: 12, color: "var(--success)" }}>
+            <Icon.check size={11} /> enregistré
+          </span>
+        )}
+      </div>
+      <p className="toggle-row-desc" style={{ marginBottom: 12 }}>
+        Les autres membres d'Antler France voient tes réservations Skedda. À toi de choisir ce qu'ils lisent.
+      </p>
+      <RadioRow
+        name="skedda-title-mode"
+        value="none"
+        checked={titleMode === "none"}
+        onChange={() => handleTitleChange("none")}
+        title="Non, garde-le privé"
+        desc="Comportement par défaut. Seul ton nom apparaît sur la réservation."
+      />
+      <RadioRow
+        name="skedda-title-mode"
+        value="anonymized"
+        checked={titleMode === "anonymized"}
+        onChange={() => handleTitleChange("anonymized")}
+        title="Une version anonymisée"
+        desc="On retire les noms — par exemple « Demo client » au lieu de « Demo Mondial Relay »."
+      />
+      <RadioRow
+        name="skedda-title-mode"
+        value="full"
+        checked={titleMode === "full"}
+        onChange={() => handleTitleChange("full")}
+        title="Oui, partage le titre complet"
+        desc="Pratique si tu veux que tes collègues Antler sachent pourquoi la salle est prise."
+      />
 
       <div className="settings-divider" />
 

@@ -28,11 +28,6 @@ const SKEDDA_BASE = "https://antlerfrance.skedda.com";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 
-// PRIVACY: never leak the real meeting title to Skedda (visible to other Antler users).
-// The sales' name IS shared (so colleagues know who booked) but NOT the meeting subject.
-// Send null (matches what real users do — most listed bookings have title=null).
-const PUBLIC_BOOKING_TITLE: string | null = null;
-
 export interface BookSkeddaArgs {
   room: RoomName;
   spaceId: number;
@@ -42,7 +37,12 @@ export interface BookSkeddaArgs {
   lastName: string;
   email: string;        // sales' real email — used as guest_id base
   telephone: string;    // E.164 (+33...)
-  title: string;
+  /**
+   * The title to display on the Skedda booking. Visible to ALL other Antler
+   * France users in their booking list. Caller is responsible for any privacy
+   * stripping (raw vs anonymized vs null) based on the user's skeddaTitleMode.
+   */
+  skeddaTitle: string | null;
   iCalUID?: string;
   userId?: import("mongodb").ObjectId;
 }
@@ -340,7 +340,7 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
       spaceId: args.spaceId,
       startsAt: args.startsAt,
       endsAt: args.endsAt,
-      title: PUBLIC_BOOKING_TITLE, // PRIVACY: never send the real meeting title
+      title: args.skeddaTitle, // already privacy-processed by the caller
     });
 
     await step(args, "booked", { bookingId });

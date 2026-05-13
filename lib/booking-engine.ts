@@ -118,7 +118,7 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       lastName: user.lastName,
       email: user.email,
       telephone: user.telephone || "",
-      title: args.meeting.title,
+      skeddaTitle: computeSkeddaTitle(args.meeting.title, user.skeddaTitleMode ?? "none"),
       iCalUID: args.iCalUID,
       userId: args.userId,
     });
@@ -196,6 +196,27 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     iCalUID: args.iCalUID,
     details: { result: "failed", reason, lastRoom },
   });
+}
+
+/**
+ * Compute the title to send to Skedda based on the user's privacy preference.
+ *  - "none"       → null (no title sent; Skedda lists just the booker's name)
+ *  - "anonymized" → keep only the first word, append "client" if there were more
+ *                   ("Demo Mondial Relay" → "Demo client", "Sync" → "Sync")
+ *  - "full"       → send the raw title verbatim
+ */
+export function computeSkeddaTitle(
+  rawTitle: string,
+  mode: "none" | "anonymized" | "full",
+): string | null {
+  if (mode === "none") return null;
+  const raw = (rawTitle || "").trim();
+  if (mode === "full") return raw || null;
+  if (!raw) return null;
+  const words = raw.split(/\s+/);
+  const first = words[0].replace(/[·•:|,;.]+$/g, "");
+  if (!first) return null;
+  return words.length === 1 ? first : `${first} client`;
 }
 
 function errorReasonText(reason: string, lastRoom: RoomName | null): string {
