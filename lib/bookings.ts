@@ -36,6 +36,7 @@ async function bookingsCol(): Promise<Collection<BookingDoc>> {
   const col = db.collection<BookingDoc>("bookings");
   if (!global.__bookingsIndexCreated) {
     await col.createIndex({ iCalUID: 1 }, { unique: true });
+    await col.createIndex({ googleEventId: 1 });
     await col.createIndex({ userId: 1, "meeting.startsAt": -1 });
     await col.createIndex({ status: 1 });
     global.__bookingsIndexCreated = true;
@@ -46,6 +47,11 @@ async function bookingsCol(): Promise<Collection<BookingDoc>> {
 export async function findBookingByICalUID(iCalUID: string): Promise<BookingDoc | null> {
   const col = await bookingsCol();
   return col.findOne({ iCalUID });
+}
+
+export async function findBookingByGoogleEventId(googleEventId: string): Promise<BookingDoc | null> {
+  const col = await bookingsCol();
+  return col.findOne({ googleEventId });
 }
 
 export async function findBookingById(id: ObjectId): Promise<BookingDoc | null> {

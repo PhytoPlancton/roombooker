@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 import { syncSince } from "@/lib/calendar";
 import { findUserByWatchChannelId, updateWatchSyncToken, type UserDoc } from "@/lib/users";
 import { shouldBookRoom } from "@/lib/booking-rules";
-import { createPendingBooking, findBookingByICalUID, deleteBookingByICalUID, markBookingResult } from "@/lib/bookings";
+import { createPendingBooking, findBookingByICalUID, findBookingByGoogleEventId, deleteBookingByICalUID, markBookingResult } from "@/lib/bookings";
 import { notifyUser } from "@/lib/notify";
 import { activateWatchForUser } from "@/lib/watch";
 import { processBookingForEvent } from "@/lib/booking-engine";
@@ -99,21 +99,31 @@ async function processChange(user: UserDoc): Promise<void> {
   const internalDomain = process.env.INTERNAL_EMAIL_DOMAIN || "muchbetter.ai";
 
   for (const event of result.changedEvents) {
-    if (!event.iCalUID) {
-      await audit({
-        action: "event_evaluated",
-        userId: user._id,
-        details: { skip: "no_iCalUID", title: event.summary },
-      });
-      continue;
-    }
-
-    // If the meeting was cancelled in Google Calendar, release the Skedda room.
+    // CANCELLED events MUST be processed before the iCalUID guard:
+    // Google's sync API returns deleted events with only {id, status: "cancelled"}
+    // — no iCalUID, no summary, no times. Resolve the booking by googleEventId
+    // (event.id) as a fallback so the Skedda release always fires.
     if (event.status === "cancelled") {
-      // Snapshot the booking BEFORE releasing — releaseBookingByICalUIDAuto will
-      // mark it cancelled and we want to recap the room/time in the SMS.
-      const priorBooking = await findBookingByICalUID(event.iCalUID);
-      const release = await releaseBookingByICalUIDAuto(event.iCalUID);
+      let priorBooking = event.iCalUID
+        ? await findBookingByICalUID(event.iCalUID)
+        : null;
+      if (!priorBooking && event.id) {
+        priorBooking = await findBookingByGoogleEventId(event.id);
+      }
+      if (!priorBooking) {
+        await audit({
+          action: "event_evaluated",
+          userId: user._id,
+          details: {
+            skip: "cancel_no_matching_booking",
+            googleEventId: event.id ?? null,
+            iCalUID: event.iCalUID ?? null,
+          },
+        });
+        continue;
+      }
+      const iCalUID = priorBooking.iCalUID;
+      const release = await releaseBookingByICalUIDAuto(iCalUID);
       // Mark the booking as cancelled regardless of what the Skedda release
       // returned. The user cancelled the meeting in Google Calendar — that's
       // the source of truth. Without this, a previously-failed booking would
@@ -121,15 +131,16 @@ async function processChange(user: UserDoc): Promise<void> {
       // longer exists. doRelease() only marks "cancelled" when the prior
       // status was exactly "booked", so we cover the failed/pending cases here.
       if (release.reason !== "not_found") {
-        await markBookingResult({ iCalUID: event.iCalUID, status: "cancelled" });
+        await markBookingResult({ iCalUID, status: "cancelled" });
       }
       await audit({
         action: "event_evaluated",
         userId: user._id,
-        iCalUID: event.iCalUID,
+        iCalUID,
         details: {
           decision: "cancel",
           source: "calendar_cancelled",
+          resolvedVia: event.iCalUID ? "iCalUID" : "googleEventId",
           released: release.ok,
           releaseReason: release.reason,
         },
@@ -160,7 +171,7 @@ async function processChange(user: UserDoc): Promise<void> {
               notifPrefs: user.notifPrefs,
             },
             type: "booking_cancelled",
-            iCalUID: event.iCalUID,
+            iCalUID,
             smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} annulee (meeting supprime dans Calendar).`,
             emailSubject: `Salle ${priorBooking.room} libérée — ${time}`,
             emailHtml: `
@@ -173,7 +184,7 @@ async function processChange(user: UserDoc): Promise<void> {
           // Skedda's lock kicks in for close-to-start bookings. The Calendar event
           // is gone, our DB should reflect that — but the sales needs to know
           // the room is still held on Skedda and only an admin can release it.
-          await markBookingResult({ iCalUID: event.iCalUID, status: "cancelled" });
+          await markBookingResult({ iCalUID, status: "cancelled" });
           await notifyUser({
             user: {
               _id: user._id,
@@ -183,7 +194,7 @@ async function processChange(user: UserDoc): Promise<void> {
               notifPrefs: user.notifPrefs,
             },
             type: "booking_failure",
-            iCalUID: event.iCalUID,
+            iCalUID,
             smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} verrouillee par Skedda. Contacte l'admin Antler pour la liberer.`,
             emailSubject: `Salle ${priorBooking.room} verrouillée sur Skedda — ${time}`,
             emailHtml: `
@@ -195,6 +206,17 @@ async function processChange(user: UserDoc): Promise<void> {
           });
         }
       }
+      continue;
+    }
+
+    // Non-cancelled events: the rest of the flow needs iCalUID to dedupe and
+    // persist. Skip if missing (rare but possible for very-fresh inserts).
+    if (!event.iCalUID) {
+      await audit({
+        action: "event_evaluated",
+        userId: user._id,
+        details: { skip: "no_iCalUID", title: event.summary, status: event.status ?? null },
+      });
       continue;
     }
 
