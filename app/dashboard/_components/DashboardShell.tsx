@@ -561,22 +561,21 @@ function SyncBadge({ event }: { event: EventVM }) {
       </span>
     );
   if (status === "deferred") {
-    // Days until the cron will fire (meeting day − 10). At least 1 — once the
-    // meeting enters Skedda's 10-day window, classifyStatus flips to "syncing".
-    const msUntilBookable =
-      new Date(event.startISO).getTime() - Date.now() - 10 * 86400_000;
-    const daysUntilBookable = Math.max(1, Math.ceil(msUntilBookable / 86400_000));
-    const bookableOn = new Date(Date.now() + msUntilBookable).toLocaleDateString(
-      "fr-FR",
-      { day: "2-digit", month: "long", timeZone: "Europe/Paris" },
-    );
+    // The Skedda 10-day booking window opens on (meeting − 10 d). Show that
+    // concrete date — more readable than a per-meeting countdown.
+    const bookableOnMs = new Date(event.startISO).getTime() - 10 * 86400_000;
+    const bookableOn = new Date(bookableOnMs).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "short",
+      timeZone: "Europe/Paris",
+    });
     return (
       <span
         className="sync-badge deferred"
-        title={`Réservation programmée pour le ${bookableOn}. Skedda n'ouvre les créneaux que 10 jours à l'avance — on s'en occupe automatiquement, tu recevras un SMS dès que la salle est confirmée.`}
+        title={`Skedda n'ouvre les créneaux que 10 jours à l'avance. On book ta salle le ${bookableOn} — tu recevras un SMS dès que c'est confirmé.`}
       >
         <Icon.clock size={11} />
-        Programmé · J-{daysUntilBookable}
+        On book le {bookableOn}
       </span>
     );
   }
