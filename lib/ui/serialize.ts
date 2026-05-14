@@ -6,7 +6,11 @@
 import type { BookingDoc, RoomName } from "@/lib/bookings";
 import { formatHHMM, initials } from "./format";
 
-export type EventStatus = "synced" | "syncing" | "conflict" | "error" | "cancelled";
+export type EventStatus = "synced" | "syncing" | "deferred" | "conflict" | "error" | "cancelled";
+
+/** Skedda's hard booking window. Bookings beyond this stay "pending" in our DB
+ *  until the cron picks them up 10 days before the meeting. */
+const SKEDDA_MAX_DAYS_AHEAD = 10;
 
 export interface EventVM {
   id: string;
@@ -32,9 +36,20 @@ export interface EventVM {
 function classifyStatus(
   status: BookingDoc["status"],
   failureReason: string | null,
+  startsAt: Date,
 ): { status: EventStatus; conflict: EventVM["conflict"] } {
   if (status === "booked") return { status: "synced", conflict: null };
-  if (status === "pending") return { status: "syncing", conflict: null };
+  if (status === "pending") {
+    // A "pending" booking whose start is beyond Skedda's 10-day window is
+    // actually queued for the cron — not actively syncing. Surface that
+    // distinct state so the UI doesn't claim an animated "Syncing…" for a
+    // meeting that won't be touched for weeks.
+    const msUntilStart = startsAt.getTime() - Date.now();
+    if (msUntilStart > SKEDDA_MAX_DAYS_AHEAD * 86400_000) {
+      return { status: "deferred", conflict: null };
+    }
+    return { status: "syncing", conflict: null };
+  }
   if (status === "cancelled") return { status: "cancelled", conflict: null };
   // status === "failed" — distinguish conflict from auth/other errors.
   const r = (failureReason || "").toLowerCase();
@@ -48,7 +63,7 @@ export function serializeBooking(b: BookingDoc, organizerName: string): EventVM 
   const startsAt = b.meeting.startsAt instanceof Date ? b.meeting.startsAt : new Date(b.meeting.startsAt);
   const endsAt = b.meeting.endsAt instanceof Date ? b.meeting.endsAt : new Date(b.meeting.endsAt);
   const updatedAt = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt);
-  const cls = classifyStatus(b.status, b.failureReason);
+  const cls = classifyStatus(b.status, b.failureReason, startsAt);
   return {
     id: b._id.toString(),
     bookingDocId: b._id.toString(),

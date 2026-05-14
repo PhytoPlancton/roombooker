@@ -886,6 +886,16 @@ a { color: inherit; }
 .sync-badge.conflict { background: var(--warning-soft); color: var(--warning); }
 .sync-badge.error { background: var(--danger-soft); color: var(--danger); }
 .sync-badge.cancelled { background: var(--bg-soft); color: var(--ink-3); }
+/* "deferred" = waiting for Skedda's 10-day window. Indigo, static (no pulse). */
+.sync-badge.deferred {
+  background: #E8E7FB;
+  color: #4F46E5;
+}
+[data-mode="dark"] .sync-badge.deferred {
+  background: rgba(99, 102, 241, 0.15);
+  color: #A5A6F6;
+}
+.sync-badge.deferred svg { opacity: 0.85; }
 
 .sync-badge .dot {
   width: 6px; height: 6px; border-radius: 999px;

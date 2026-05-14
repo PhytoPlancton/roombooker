@@ -538,13 +538,14 @@ function EventRow({ event, selected, onClick, past }: { event: EventVM; selected
         </div>
       </div>
       <div className="event-status">
-        <SyncBadge status={event.status} />
+        <SyncBadge event={event} />
       </div>
     </li>
   );
 }
 
-function SyncBadge({ status }: { status: EventVM["status"] }) {
+function SyncBadge({ event }: { event: EventVM }) {
+  const status = event.status;
   if (status === "synced")
     return (
       <span className="sync-badge">
@@ -559,6 +560,26 @@ function SyncBadge({ status }: { status: EventVM["status"] }) {
         Syncing…
       </span>
     );
+  if (status === "deferred") {
+    // Days until the cron will fire (meeting day − 10). At least 1 — once the
+    // meeting enters Skedda's 10-day window, classifyStatus flips to "syncing".
+    const msUntilBookable =
+      new Date(event.startISO).getTime() - Date.now() - 10 * 86400_000;
+    const daysUntilBookable = Math.max(1, Math.ceil(msUntilBookable / 86400_000));
+    const bookableOn = new Date(Date.now() + msUntilBookable).toLocaleDateString(
+      "fr-FR",
+      { day: "2-digit", month: "long", timeZone: "Europe/Paris" },
+    );
+    return (
+      <span
+        className="sync-badge deferred"
+        title={`Réservation programmée pour le ${bookableOn}. Skedda n'ouvre les créneaux que 10 jours à l'avance — on s'en occupe automatiquement, tu recevras un SMS dès que la salle est confirmée.`}
+      >
+        <Icon.clock size={11} />
+        Programmé · J-{daysUntilBookable}
+      </span>
+    );
+  }
   if (status === "conflict")
     return (
       <span className="sync-badge conflict">
