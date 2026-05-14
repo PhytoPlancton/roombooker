@@ -77,7 +77,7 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       },
       type: "booking_deferred",
       iCalUID: args.iCalUID,
-      smsText: `RoomBooker: on a bien recu ta reu du ${meetingDateFr}. Skedda n'ouvre les resas que 10 jours avant - je m'en occupe le ${willTryDateFr} au matin. Rien a faire.`,
+      smsText: `RoomBooker : on a bien reçu ta réu du ${meetingDateFr}. Skedda n'ouvre les résas que 10 jours avant — je m'en occupe le ${willTryDateFr} au matin. Rien à faire.`,
       emailSubject: `On s'occupe de ta salle pour le ${meetingDateFr}`,
       emailHtml: `<p>Bien reçu ta réu du <strong>${meetingDateFr}</strong>.</p><p>Skedda n'ouvre les réservations que 10 jours avant — je m'en occupe le <strong>${willTryDateFr} au matin</strong>. Tu seras prévenu dès que la salle est bloquée.</p>`,
     });
@@ -263,7 +263,7 @@ async function notifySuccess(
     },
     type: "booking_success",
     iCalUID: args.iCalUID,
-    smsText: `RoomBooker: salle ${room} reservee pour ${time}. Annuler: ${cancelUrl}`,
+    smsText: `RoomBooker : salle ${room} réservée pour ${time}. Annuler : ${cancelUrl}`,
     emailSubject: `${room} bloquée · ${time}`,
     emailHtml: `<p>Salle <strong>${room}</strong> bloquée sur Skedda · ${time}.</p><p><a href="${cancelUrl}">Annuler en 1 clic</a></p>`,
   });
@@ -288,7 +288,7 @@ async function notifyFailure(user: UserDoc, args: ProcessBookingArgs, reasonText
     },
     type: "booking_failure",
     iCalUID: args.iCalUID,
-    smsText: `RoomBooker: echec resa pour "${args.meeting.title}" (${time}). ${reasonText}`,
+    smsText: `RoomBooker : échec résa pour « ${args.meeting.title} » (${time}). ${reasonText}`,
     emailSubject: `Échec réservation · ${args.meeting.title}`,
     emailHtml: `<p>Pas de salle pour <strong>${args.meeting.title}</strong> · ${time}.</p><p>${reasonText}</p><p><a href="https://antlerfrance.skedda.com/booking">Réserver manuellement sur Skedda →</a></p>`,
   });

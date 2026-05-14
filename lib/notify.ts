@@ -24,25 +24,6 @@ interface EdjSmsResponse {
   failed?: Array<{ address: string; status: string; error: string }> | null;
 }
 
-/**
- * Strip diacritics so SMS stays in 7-bit GSM-03.38 encoding (160 chars/credit).
- * Without this, a single "é" forces UCS-2 → 70 chars/credit → 2 SMS per booking.
- *   "Mémoire · créneau" → "Memoire . creneau"
- * Applied centrally at the gateway so every caller is consistent.
- */
-function stripAccents(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    // A few non-GSM punctuation chars worth replacing too — otherwise they
-    // also force UCS-2 encoding and halve the per-SMS character budget.
-    .replace(/[«»]/g, '"')        // « »  → "
-    .replace(/[‘’]/g, "'")        // ‘ ’  → '
-    .replace(/[“”]/g, '"')        // " "  → "
-    .replace(/[–—]/g, "-")        // – —  → -
-    .replace(/[·•]/g, ".");       // · •  → .
-}
-
 export async function sendSms(args: SmsArgs): Promise<{ success: boolean; error?: string }> {
   const token = process.env.EDJ_SMS_API_TOKEN;
   if (!token) return { success: false, error: "EDJ_SMS_API_TOKEN missing" };
@@ -54,7 +35,7 @@ export async function sendSms(args: SmsArgs): Promise<{ success: boolean; error?
         "X-Api-Token": token,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ address: args.phoneNumber, text: stripAccents(args.text) }),
+      body: JSON.stringify({ address: args.phoneNumber, text: args.text }),
     });
 
     // EDJ Labs returns HTTP 200 even when the gateway fails. The real status

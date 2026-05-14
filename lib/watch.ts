@@ -75,7 +75,7 @@ export async function activateWatchForUser(
         notifPrefs: user.notifPrefs,
       },
       type: "watch_resync",
-      smsText: `RoomBooker: ${reason}. Aucune action requise.`,
+      smsText: `RoomBooker : ${reason}. Aucune action requise.`,
       emailSubject: "Surveillance Calendar réinitialisée",
       emailHtml: `<p>${reason}. Rien à faire — les meetings continuent d'être bookés normalement.</p>`,
     });

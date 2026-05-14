@@ -172,7 +172,7 @@ async function processChange(user: UserDoc): Promise<void> {
             },
             type: "booking_cancelled",
             iCalUID,
-            smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} annulee (meeting supprime dans Calendar).`,
+            smsText: `RoomBooker : salle ${priorBooking.room} pour ${time} annulée (meeting supprimé dans Calendar).`,
             emailSubject: `${priorBooking.room} libérée · ${time}`,
             emailHtml: `<p>Salle <strong>${priorBooking.room}</strong> libérée sur Skedda · ${time}.</p>`,
           });
@@ -191,7 +191,7 @@ async function processChange(user: UserDoc): Promise<void> {
             },
             type: "booking_failure",
             iCalUID,
-            smsText: `RoomBooker: salle ${priorBooking.room} pour ${time} verrouillee par Skedda. Contacte l'admin Antler pour la liberer.`,
+            smsText: `RoomBooker : salle ${priorBooking.room} pour ${time} verrouillée par Skedda. Contacte l'admin Antler pour la libérer.`,
             emailSubject: `Action requise · ${priorBooking.room} verrouillée sur Skedda`,
             emailHtml: `<p><strong>Action requise.</strong> Skedda refuse de libérer <strong>${priorBooking.room}</strong> (${time}) — créneau trop proche ou commencé.</p><p>Contacte un admin Antler pour libérer la salle. Le dashboard Roombooker affiche déjà la résa comme annulée.</p>`,
           });
