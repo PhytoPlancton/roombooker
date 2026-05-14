@@ -75,11 +75,11 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
         telephone: user.telephone,
         notifPrefs: user.notifPrefs,
       },
-      type: "booking_success",
+      type: "booking_deferred",
       iCalUID: args.iCalUID,
-      smsText: `RoomBooker: meeting du ${meetingDateFr} hors fenetre Skedda (max 10j). Reservation auto le ${willTryDateFr}.`,
-      emailSubject: `Réservation différée — ${meetingDateFr}`,
-      emailHtml: `<p>Meeting du <strong>${meetingDateFr}</strong> hors fenêtre Skedda (10 j max).</p><p>Je le réserve auto le <strong>${willTryDateFr}</strong>. Rien à faire.</p>`,
+      smsText: `RoomBooker: on a bien recu ta reu du ${meetingDateFr}. Skedda n'ouvre les resas que 10 jours avant - je m'en occupe le ${willTryDateFr} au matin. Rien a faire.`,
+      emailSubject: `On s'occupe de ta salle pour le ${meetingDateFr}`,
+      emailHtml: `<p>Bien reçu ta réu du <strong>${meetingDateFr}</strong>.</p><p>Skedda n'ouvre les réservations que 10 jours avant — je m'en occupe le <strong>${willTryDateFr} au matin</strong>. Tu seras prévenu dès que la salle est bloquée.</p>`,
     });
 
     await audit({

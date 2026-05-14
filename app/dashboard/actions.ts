@@ -49,13 +49,17 @@ export async function saveNotifPrefsAction(formData: FormData): Promise<{ ok: bo
       sms: formData.get("booking_success_sms") === "on",
       email: formData.get("booking_success_email") === "on",
     },
-    booking_failure: {
-      sms: formData.get("booking_failure_sms") === "on",
-      email: formData.get("booking_failure_email") === "on",
+    booking_deferred: {
+      sms: formData.get("booking_deferred_sms") === "on",
+      email: formData.get("booking_deferred_email") === "on",
     },
     booking_cancelled: {
       sms: formData.get("booking_cancelled_sms") === "on",
       email: formData.get("booking_cancelled_email") === "on",
+    },
+    booking_failure: {
+      sms: formData.get("booking_failure_sms") === "on",
+      email: formData.get("booking_failure_email") === "on",
     },
     watch_resync: {
       sms: formData.get("watch_resync_sms") === "on",

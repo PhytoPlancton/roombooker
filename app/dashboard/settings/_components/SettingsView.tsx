@@ -458,6 +458,15 @@ function NotifsSection({
           hasPhone={!!telephone}
         />
         <NotifTypeCard
+          title="Réservation programmée"
+          desc="Quand un meeting est créé plus de 10 jours à l'avance — on attend que Skedda ouvre la fenêtre pour booker."
+          smsOn={prefs.booking_deferred.sms}
+          emailOn={prefs.booking_deferred.email}
+          onSms={(v) => updatePref("booking_deferred", "sms", v)}
+          onEmail={(v) => updatePref("booking_deferred", "email", v)}
+          hasPhone={!!telephone}
+        />
+        <NotifTypeCard
           title="Réservation annulée"
           desc="Quand tu supprimes un meeting dans Calendar et qu'on libère la salle sur Skedda."
           smsOn={prefs.booking_cancelled.sms}

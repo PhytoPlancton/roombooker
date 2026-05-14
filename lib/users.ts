@@ -18,7 +18,12 @@ export interface DecryptedTokens {
  * Per-notification-type, per-channel preferences. Adding a new channel (Slack,
  * push) = add a key to ChannelPrefs. Adding a new type = add a key to NotifPrefs.
  */
-export type NotifType = "booking_success" | "booking_failure" | "booking_cancelled" | "watch_resync";
+export type NotifType =
+  | "booking_success"
+  | "booking_failure"
+  | "booking_cancelled"
+  | "booking_deferred"
+  | "watch_resync";
 export interface ChannelPrefs {
   sms: boolean;
   email: boolean;
@@ -27,6 +32,7 @@ export interface NotifPrefs {
   booking_success: ChannelPrefs;
   booking_failure: ChannelPrefs;
   booking_cancelled: ChannelPrefs;
+  booking_deferred: ChannelPrefs;
   watch_resync: ChannelPrefs;
 }
 export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
@@ -34,6 +40,7 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   booking_success: { sms: false, email: true }, // not urgent, traceable, includes magic cancel link
   booking_failure: { sms: true, email: true },  // critical: action required
   booking_cancelled: { sms: false, email: true }, // mirror of booking_success — confirms cancel went through
+  booking_deferred: { sms: true, email: true },  // ONLY signal during 10 days — SMS is non-negotiable
   watch_resync: { sms: false, email: false },   // technical, no action needed
 };
 
