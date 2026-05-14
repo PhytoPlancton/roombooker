@@ -85,14 +85,20 @@ export async function activateWatchForUser(
 export async function deactivateWatchForUser(userId: ObjectId): Promise<void> {
   const user = await findUserById(userId);
   if (!user) return;
-  if (user.watchChannelId && user.watchResourceId) {
+  const hadActiveWatch = !!(user.watchChannelId && user.watchResourceId);
+  if (hadActiveWatch) {
     await stopWatch({
       user,
-      channelId: user.watchChannelId,
-      resourceId: user.watchResourceId,
+      channelId: user.watchChannelId!,
+      resourceId: user.watchResourceId!,
     });
   }
   await clearWatchInfo(userId);
+  await audit({
+    action: "watch_deactivated",
+    userId,
+    details: { hadActiveWatch },
+  });
 }
 
 export function watchExpiringSoon(user: UserDoc, withinMs = 48 * 3600 * 1000): boolean {

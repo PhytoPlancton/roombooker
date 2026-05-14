@@ -155,12 +155,31 @@ export function DashboardShell({ user, events, watchActive, flashError, flashSuc
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <form action={watchActive ? deactivateWatchAction : activateWatchAction}>
+            <form
+              action={watchActive ? deactivateWatchAction : activateWatchAction}
+              onSubmit={
+                watchActive
+                  ? (e) => {
+                      if (
+                        !window.confirm(
+                          "Mettre la synchro en pause ?\n\nTes nouveaux meetings Google Calendar ne seront plus bookés automatiquement sur Skedda jusqu'à ce que tu la réactives.",
+                        )
+                      ) {
+                        e.preventDefault();
+                      }
+                    }
+                  : undefined
+              }
+            >
               <button
                 type="submit"
                 className="sync-toggle"
                 data-active={watchActive}
-                title={watchActive ? "Cliquer pour mettre la synchro en pause" : "Cliquer pour réactiver la synchro"}
+                title={
+                  watchActive
+                    ? "Cliquer pour mettre la synchro en pause — les nouveaux meetings ne seront plus bookés automatiquement"
+                    : "Cliquer pour réactiver la synchro"
+                }
               >
                 <span className="sync-toggle-dot" />
                 {watchActive ? "Sync active" : "Sync en pause"}
