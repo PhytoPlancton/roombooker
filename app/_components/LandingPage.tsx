@@ -139,6 +139,7 @@ export function LandingPage({ flashError }: { flashError: string | null }) {
               Les Sales bookent leur démo sur Google Calendar pour leur prospect.
               Puis ils doivent re-bloquer la salle physique sur Skedda. Le temps qu'ils y pensent,
               une personne de chez Antler a pris la salle. Résultat : démo dans le couloir.
+              Et quand tu poses une démo trois semaines à l'avance, Skedda refuse même la réservation.
             </p>
           </div>
 
@@ -154,7 +155,7 @@ export function LandingPage({ flashError }: { flashError: string | null }) {
               </p>
             </div>
             <div className="landing-problem-card after">
-              <span className="landing-problem-card-tag">Avec Roombooker</span>
+              <span className="landing-problem-card-tag">Avec Roombooker — démos dans les 10 jours</span>
               <h3 className="landing-problem-card-h">
                 Dès que le meeting est créé, la salle est à toi.
               </h3>
@@ -162,6 +163,19 @@ export function LandingPage({ flashError }: { flashError: string | null }) {
                 Roombooker écoute ton Calendar et pose la salle sur Skedda en
                 moins de 5 secondes. Plus rapide que quelqu'un de chez Antler : tu
                 maximises tes chances d'avoir la bonne salle.
+              </p>
+            </div>
+            <div className="landing-problem-card after">
+              <span className="landing-problem-card-tag">Avec Roombooker — démos planifiées 3 semaines à l'avance</span>
+              <h3 className="landing-problem-card-h">
+                Skedda dit non ? On attend pour toi.
+              </h3>
+              <p className="landing-problem-card-p">
+                Skedda ne laisse réserver qu'à 10 jours. Pour une démo posée trois
+                semaines plus tard, tu notes mentalement de revenir le moment venu —
+                et tu oublies. Roombooker garde la réservation en attente et la
+                déclenche à la seconde où Skedda ouvre la fenêtre. Tu poses le
+                meeting une fois, la salle arrive toute seule, même un mois plus tard.
               </p>
             </div>
           </div>

@@ -306,14 +306,15 @@
   margin: 0;
 }
 
-/* Problem grid */
+/* Problem grid — 3 columns: 1 "Avant" + 2 "Avec Roombooker" angles */
 .landing-problem-grid {
   margin-top: 48px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
 }
-@media (max-width: 760px) { .landing-problem-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1080px) { .landing-problem-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .landing-problem-grid { grid-template-columns: 1fr; } }
 
 .landing-problem-card {
   background: var(--bg-elev);
