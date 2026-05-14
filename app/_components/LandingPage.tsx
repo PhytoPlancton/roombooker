@@ -218,13 +218,7 @@ export function LandingPage({ flashError }: { flashError: string | null }) {
 
       <section className="landing-section landing-section-soft">
         <div className="landing-container">
-          <p className="landing-quote-text reveal">
-            « Avant Roombooker, on bookait deux fois : sur Google, puis sur Skedda.
-            Maintenant, on book une fois et on oublie. »
-          </p>
-          <p className="landing-quote-author reveal">
-            — Tom Marchand, Sales · 5 démos par jour
-          </p>
+          <RotatingQuotes />
         </div>
       </section>
 
@@ -246,6 +240,74 @@ export function LandingPage({ flashError }: { flashError: string | null }) {
           {" · © 2026 · Pour les Sales qui jonglent avec 5 salles"}
         </div>
       </footer>
+    </div>
+  );
+}
+
+/**
+ * Two-quote rotator with a very subtle crossfade.
+ * Cadence 8s, fade 700ms ease-in-out, stacked DOM (one absolute over the other
+ * so the section height never jolts). Pauses when the section is off-screen
+ * or the tab is hidden. Respects prefers-reduced-motion → pins to quote 0.
+ * No dots/arrows — discretion is the point.
+ */
+function RotatingQuotes() {
+  const quotes = [
+    {
+      text: "« Avant Roombooker, on bookait deux fois : sur Google, puis sur Skedda. Maintenant, on book une fois et on oublie. »",
+      author: "— Tom Marchand, Sales · 5 démos par jour",
+    },
+    {
+      text: "« Je cale une démo dans 3 semaines, Skedda refuse, j'oublie, je perds la salle. Avec Roombooker je pose le créneau, il s'occupe du reste le jour J. »",
+      author: "— Léa Brunet, Account Executive · pipeline à 4 semaines",
+    },
+  ];
+
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    if (!container) return;
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) return; // pin to quote 0, no rotation, no fade
+
+    let visible = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) visible = e.isIntersecting;
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(container);
+
+    const id = window.setInterval(() => {
+      if (!visible || document.hidden) return;
+      setActive((a) => (a + 1) % quotes.length);
+    }, 8000);
+
+    return () => {
+      io.disconnect();
+      window.clearInterval(id);
+    };
+  // quotes.length is stable on every render — safe to omit from deps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [container]);
+
+  return (
+    <div className="landing-quote-stack" ref={setContainer}>
+      {quotes.map((q, i) => (
+        <figure
+          key={i}
+          className={`landing-quote-figure${active === i ? " is-active" : ""}`}
+          aria-hidden={active !== i}
+        >
+          <p className="landing-quote-text reveal in">{q.text}</p>
+          <p className="landing-quote-author">{q.author}</p>
+        </figure>
+      ))}
     </div>
   );
 }

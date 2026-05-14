@@ -412,6 +412,30 @@
   margin: 0;
 }
 
+/* Rotating quotes — stacked, opacity-toggled crossfade */
+.landing-quote-stack {
+  position: relative;
+}
+.landing-quote-figure {
+  margin: 0;
+  opacity: 0;
+  transition: opacity 700ms ease-in-out;
+  pointer-events: none;
+}
+.landing-quote-figure.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* All non-first figures stack on top, absolutely, so the first one defines
+   the container's intrinsic height. */
+.landing-quote-figure:not(:first-child) {
+  position: absolute;
+  inset: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-quote-figure { transition: none; }
+}
+
 /* Footer */
 .landing-footer {
   padding: 32px 28px;
