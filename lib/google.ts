@@ -1,9 +1,12 @@
 import { OAuth2Client } from "google-auth-library";
 import { google } from "googleapis";
 
+// Minimum scope set: calendar.events covers list + watch + patch on the
+// user's primary calendar — everything the app needs (sync, push, location
+// update). calendar.readonly was redundant and broader than necessary.
+// Keeping the scope list tight makes Google verification simpler too.
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
