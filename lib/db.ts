@@ -11,11 +11,18 @@ function makeClient(): MongoClient {
     throw new Error("MONGODB_URI missing — see .env.example");
   }
   return new MongoClient(uri, {
-    maxPoolSize: 20,
-    minPoolSize: 2,
+    // Right-sized for a 5-user app on a SHARED Atlas M0 cluster (500
+    // connections cluster-wide, ~5 apps competing). With 20 we kept all
+    // pool slots warm and starved the rest of the cluster — when neighbors
+    // spiked, our waitQueue timed out and webhooks/cron silently lost
+    // their DB writes (no audit, no booking). At 5 with a 30s idle expiry,
+    // we hold ~1-3 connections in steady state and release them quickly.
+    maxPoolSize: 5,
+    minPoolSize: 0,
+    maxIdleTimeMS: 30_000,
     socketTimeoutMS: 30_000,
     serverSelectionTimeoutMS: 10_000,
-    waitQueueTimeoutMS: 5_000,
+    waitQueueTimeoutMS: 10_000,
   });
 }
 
