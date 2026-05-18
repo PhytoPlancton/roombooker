@@ -37,12 +37,17 @@ export interface NotifPrefs {
   watch_resync: ChannelPrefs;
 }
 export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
-  // Conservative defaults — see product spec.
-  booking_success: { sms: false, email: true, whatsapp: false }, // not urgent, traceable, includes magic cancel link
-  booking_failure: { sms: true, email: true, whatsapp: false },  // critical: action required
-  booking_cancelled: { sms: false, email: true, whatsapp: false }, // mirror of booking_success — confirms cancel went through
-  booking_deferred: { sms: true, email: true, whatsapp: false },  // ONLY signal during 10 days — SMS is non-negotiable
-  watch_resync: { sms: false, email: false, whatsapp: false },   // technical, no action needed
+  // WhatsApp-first defaults (v0.10.31). EDJ SMS gateway has been flaky and
+  // Gmail Workspace puts our emails in spam — WhatsApp is the most reliable
+  // channel for sales today, so it's the only ON-by-default channel for the
+  // 3 routine confirmations. booking_failure stays multi-channel (action
+  // required, can't afford a silent failure); watch_resync stays all-off
+  // (technical, no action needed).
+  booking_success: { sms: false, email: false, whatsapp: true },
+  booking_failure: { sms: true, email: true, whatsapp: true },
+  booking_cancelled: { sms: false, email: false, whatsapp: true },
+  booking_deferred: { sms: false, email: false, whatsapp: true },
+  watch_resync: { sms: false, email: false, whatsapp: false },
 };
 
 /**
