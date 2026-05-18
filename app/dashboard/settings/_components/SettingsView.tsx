@@ -7,7 +7,7 @@ import { initials } from "@/lib/ui/format";
 import type { BookingRules, NotifPrefs } from "@/lib/users";
 import type { ChannelAvailability } from "@/lib/service-state";
 import type { RoomName } from "@/lib/bookings";
-import { activateWatchAction, deactivateWatchAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction } from "../../actions";
+import { activateWatchAction, deactivateWatchAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction, testChannelAction } from "../../actions";
 import { PriorityDnD } from "./PriorityDnD";
 import { PhoneEditor } from "./PhoneEditor";
 
@@ -387,6 +387,25 @@ function NotifsSection({
   const [savedHint, setSavedHint] = useState(false);
   const [titleSavedHint, setTitleSavedHint] = useState(false);
   const [prefsSavedHint, setPrefsSavedHint] = useState(false);
+  /** Per-channel test status: undefined = idle, "pending" = sending,
+   *  "ok" = sent OK, string = error message. */
+  const [testStatus, setTestStatus] = useState<
+    Record<"sms" | "whatsapp" | "email", "pending" | "ok" | string | undefined>
+  >({ sms: undefined, whatsapp: undefined, email: undefined });
+
+  const runChannelTest = (channel: "sms" | "whatsapp" | "email") => {
+    setTestStatus((s) => ({ ...s, [channel]: "pending" }));
+    const fd = new FormData();
+    fd.set("channel", channel);
+    startTransition(async () => {
+      const r = await testChannelAction(fd);
+      setTestStatus((s) => ({ ...s, [channel]: r.ok ? "ok" : r.error || "send_failed" }));
+      // Auto-clear after 4s so the row goes back to neutral
+      setTimeout(() => {
+        setTestStatus((s) => ({ ...s, [channel]: undefined }));
+      }, 4000);
+    });
+  };
 
   const handleChange = (next: "location" | "description" | "none") => {
     setCurrent(next);
@@ -453,6 +472,32 @@ function NotifsSection({
             <Icon.check size={11} /> enregistré
           </span>
         )}
+      </div>
+
+      <div className="notif-test-row">
+        <span className="notif-test-label">Tester un canal :</span>
+        <ChannelTestButton
+          label="SMS"
+          status={testStatus.sms}
+          paused={!channelAvailability.sms}
+          disabled={!telephone}
+          disabledHint="Ajoute un numéro d'abord"
+          onClick={() => runChannelTest("sms")}
+        />
+        <ChannelTestButton
+          label="WhatsApp"
+          status={testStatus.whatsapp}
+          paused={!channelAvailability.whatsapp}
+          disabled={!telephone}
+          disabledHint="Ajoute un numéro d'abord"
+          onClick={() => runChannelTest("whatsapp")}
+        />
+        <ChannelTestButton
+          label="Email"
+          status={testStatus.email}
+          paused={!channelAvailability.email}
+          onClick={() => runChannelTest("email")}
+        />
       </div>
 
       {(() => {
@@ -689,6 +734,54 @@ function NotifTypeCard({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Small button that sends a real test notification on the chosen channel.
+ * Status comes from the parent (pending / ok / error string / undefined).
+ * Auto-resets after 4s in the parent.
+ */
+function ChannelTestButton({
+  label,
+  status,
+  paused,
+  disabled,
+  disabledHint,
+  onClick,
+}: {
+  label: string;
+  status: "pending" | "ok" | string | undefined;
+  paused?: boolean;
+  disabled?: boolean;
+  disabledHint?: string;
+  onClick: () => void;
+}) {
+  const isPending = status === "pending";
+  const isOk = status === "ok";
+  const errorMsg = status && status !== "pending" && status !== "ok" ? status : undefined;
+  const inactive = disabled || paused || isPending;
+  const tooltip = paused
+    ? `${label} en pause côté Roombooker`
+    : disabled
+      ? disabledHint
+      : errorMsg
+        ? `Erreur : ${errorMsg}`
+        : undefined;
+  return (
+    <button
+      type="button"
+      className={`notif-test-btn${isOk ? " is-ok" : ""}${errorMsg ? " is-error" : ""}${
+        paused ? " is-paused" : ""
+      }`}
+      onClick={() => !inactive && onClick()}
+      disabled={inactive}
+      title={tooltip}
+      aria-label={`Tester ${label}`}
+    >
+      {isPending ? "…" : isOk ? <Icon.check size={11} /> : errorMsg ? <Icon.alert size={11} /> : null}
+      <span>{label}</span>
+    </button>
   );
 }
 

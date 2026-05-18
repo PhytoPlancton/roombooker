@@ -6,8 +6,12 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/session";
 import { activateWatchForUser, deactivateWatchForUser } from "@/lib/watch";
 import { releaseBookingByIdAsUser } from "@/lib/release-booking";
-import { setChannelAvailability, type ChannelAvailability } from "@/lib/service-state";
+import { setChannelAvailability, getChannelAvailability, type ChannelAvailability } from "@/lib/service-state";
 import { findUserById } from "@/lib/users";
+import { sendSms, sendEmail, sendWhatsapp } from "@/lib/notify";
+import { findBookingById } from "@/lib/bookings";
+import { processBookingForEvent } from "@/lib/booking-engine";
+import { audit } from "@/lib/audit";
 import {
   setBookingRules,
   setNotifPrefs,
@@ -222,5 +226,133 @@ export async function setChannelAvailabilityAction(formData: FormData): Promise<
   await setChannelAvailability(channel, enabled);
   revalidatePath("/dashboard/admin");
   revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+/**
+ * Send a test message via the requested channel to the current user. Lets
+ * them verify the canal works end-to-end (provider up, number/email reachable,
+ * not in spam) before relying on real notifications.
+ */
+export async function testChannelAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await requireUser();
+  const user = await findUserById(userId);
+  if (!user) return { ok: false, error: "user_not_found" };
+
+  const rawChannel = formData.get("channel");
+  const valid = ["sms", "email", "whatsapp"] as const;
+  if (typeof rawChannel !== "string" || !(valid as readonly string[]).includes(rawChannel)) {
+    return { ok: false, error: "invalid_channel" };
+  }
+  const channel = rawChannel as (typeof valid)[number];
+
+  const availability = await getChannelAvailability();
+  if (!availability[channel]) return { ok: false, error: "channel_paused" };
+
+  if ((channel === "sms" || channel === "whatsapp") && !user.telephone) {
+    return { ok: false, error: "no_phone" };
+  }
+
+  const now = new Date().toLocaleString("fr-FR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Paris",
+  });
+  const text = `RoomBooker : test ${channel.toUpperCase()} reçu à ${now}. Si tu lis ça, le canal fonctionne ✓`;
+
+  let result: { success: boolean; error?: string };
+  if (channel === "sms") {
+    result = await sendSms({ phoneNumber: user.telephone!, text });
+  } else if (channel === "whatsapp") {
+    result = await sendWhatsapp({ phoneNumber: user.telephone!, text });
+  } else {
+    result = await sendEmail({
+      to: { email: user.email, name: user.firstName },
+      subject: `RoomBooker — test Email ${now}`,
+      htmlContent: `<p>${text}</p><p>Si tu lis ça, le canal fonctionne ✓</p>`,
+    });
+  }
+
+  await audit({
+    action: result.success ? "notify_sent" : "error",
+    userId,
+    details: {
+      channel,
+      type: "channel_test",
+      to: channel === "email" ? user.email : user.telephone,
+      success: result.success,
+      error: result.error,
+    },
+  });
+
+  if (!result.success) {
+    return { ok: false, error: result.error || "send_failed" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Re-run the booking engine on a single booking. Used by the "Forcer la
+ * synchro" button on the dashboard drawer — useful when a booking is stuck
+ * "Syncing…" or marked "Erreur" / "Conflit" and the user wants to retry
+ * without having to delete + recreate the meeting in Calendar.
+ *
+ * Status semantics:
+ *  - failed / conflict / pending  → re-run the engine
+ *  - booked                       → no-op, return current state
+ *  - cancelled                    → refuse (user explicitly cancelled)
+ */
+export async function forceResyncAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await requireUser();
+  const raw = formData.get("bookingId");
+  if (typeof raw !== "string") return { ok: false, error: "missing_id" };
+  let bookingId: ObjectId;
+  try {
+    bookingId = new ObjectId(raw);
+  } catch {
+    return { ok: false, error: "invalid_id" };
+  }
+
+  const booking = await findBookingById(bookingId);
+  if (!booking) return { ok: false, error: "not_found" };
+  if (!booking.userId.equals(userId)) return { ok: false, error: "wrong_user" };
+
+  if (booking.status === "booked") {
+    return { ok: false, error: "already_booked" };
+  }
+  if (booking.status === "cancelled") {
+    return { ok: false, error: "cancelled" };
+  }
+
+  await audit({
+    action: "booking_engine_started",
+    userId,
+    iCalUID: booking.iCalUID,
+    details: { source: "force_resync", priorStatus: booking.status },
+  });
+
+  // Fire-and-forget — the engine writes its own audits + flips status.
+  void processBookingForEvent({
+    iCalUID: booking.iCalUID,
+    googleEventId: booking.googleEventId,
+    userId,
+    meeting: booking.meeting,
+  }).catch((err) => {
+    audit({
+      action: "error",
+      userId,
+      iCalUID: booking.iCalUID,
+      details: { where: "force_resync", message: String(err) },
+    });
+  });
+
+  revalidatePath("/dashboard");
   return { ok: true };
 }

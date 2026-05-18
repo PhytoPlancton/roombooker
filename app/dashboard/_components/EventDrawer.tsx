@@ -1,9 +1,12 @@
 "use client";
 
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { roomById, ATTENDEE_COLORS } from "@/lib/ui/rooms";
 import { durationLabel, initials, shortDayLabel } from "@/lib/ui/format";
 import type { EventVM } from "@/lib/ui/serialize";
+import { forceResyncAction } from "../actions";
 
 interface EventDrawerProps {
   event: EventVM | null;
@@ -14,6 +17,9 @@ interface EventDrawerProps {
 }
 
 export function EventDrawer({ event, open, onClose, cancelAction, onActionToast }: EventDrawerProps) {
+  const router = useRouter();
+  const [resyncPending, startResync] = useTransition();
+
   if (!event) return <div className="drawer" data-open="false" />;
 
   const room = event.room ? roomById(event.room) : null;
@@ -22,6 +28,24 @@ export function EventDrawer({ event, open, onClose, cancelAction, onActionToast 
   const heroClass = isConflict ? "conflict" : isError ? "error" : "";
 
   const stub = (label: string) => () => onActionToast(`${label} : bientôt dispo`);
+
+  const handleForceResync = () => {
+    const fd = new FormData();
+    fd.set("bookingId", event.bookingDocId);
+    startResync(async () => {
+      const r = await forceResyncAction(fd);
+      if (r.ok) {
+        onActionToast("Re-synchronisation lancée — recharge dans quelques secondes pour voir le résultat");
+        router.refresh();
+      } else if (r.error === "already_booked") {
+        onActionToast("Déjà synchronisé sur Skedda ✓");
+      } else if (r.error === "cancelled") {
+        onActionToast("Annulé — recrée le meeting dans Calendar pour re-booker");
+      } else {
+        onActionToast(`Re-sync impossible : ${r.error || "erreur inconnue"}`);
+      }
+    });
+  };
 
   return (
     <>
@@ -213,9 +237,15 @@ export function EventDrawer({ event, open, onClose, cancelAction, onActionToast 
         </div>
 
         <footer className="drawer-footer">
-          <button className="btn" onClick={stub("Forcer la synchro")} type="button">
+          <button
+            className="btn"
+            onClick={handleForceResync}
+            type="button"
+            disabled={resyncPending}
+            title="Relance le moteur de booking pour ce meeting"
+          >
             <Icon.refresh size={14} />
-            Forcer la synchro
+            {resyncPending ? "Synchronisation…" : "Forcer la synchro"}
           </button>
           <div style={{ flex: 1 }} />
           {event.status === "synced" && (() => {
