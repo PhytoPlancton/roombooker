@@ -56,6 +56,39 @@ export async function sendSms(args: SmsArgs): Promise<{ success: boolean; error?
   }
 }
 
+/**
+ * EDJ Labs WhatsApp API. Same pattern as the SMS endpoint, different path +
+ * token. Accents and emoji are fine on WhatsApp (no GSM-7 limit).
+ */
+export async function sendWhatsapp(args: SmsArgs): Promise<{ success: boolean; error?: string }> {
+  const token = process.env.EDJ_WA_API_TOKEN;
+  if (!token) return { success: false, error: "EDJ_WA_API_TOKEN missing" };
+
+  try {
+    const res = await fetch("https://api.edj-labs.com/wa/send", {
+      method: "POST",
+      headers: {
+        "X-Api-Token": token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ address: args.phoneNumber, text: args.text }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      return { success: false, error: `HTTP ${res.status}: ${body.slice(0, 200)}` };
+    }
+    const json = (await res.json()) as EdjSmsResponse;
+    if (json.failed && json.failed.length > 0) {
+      const f = json.failed[0];
+      return { success: false, error: `gateway: ${f.error} (status=${f.status})` };
+    }
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "unknown";
+    return { success: false, error: message };
+  }
+}
+
 export async function sendEmail(args: EmailArgs): Promise<{ success: boolean; error?: string }> {
   // EDJ Labs Emailing API. Sender is enforced server-side
   // (postmaster@edj-labs.com); the display name is configured in the EDJ
@@ -120,6 +153,17 @@ export async function notifyUser(args: {
       userId: user._id ?? null,
       iCalUID: iCalUID ?? null,
       details: { channel: "sms", type, to: user.telephone, success: r.success, error: r.error },
+    });
+  }
+  // `whatsapp` is optional on ChannelPrefs for backward-compat with users
+  // whose stored prefs predate the WhatsApp channel (added in v0.10.29).
+  if ((prefs as { whatsapp?: boolean }).whatsapp && user.telephone) {
+    const r = await sendWhatsapp({ phoneNumber: user.telephone, text: smsText });
+    await audit({
+      action: r.success ? "notify_sent" : "error",
+      userId: user._id ?? null,
+      iCalUID: iCalUID ?? null,
+      details: { channel: "whatsapp", type, to: user.telephone, success: r.success, error: r.error },
     });
   }
   if (prefs.email) {

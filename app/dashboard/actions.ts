@@ -48,22 +48,27 @@ export async function saveNotifPrefsAction(formData: FormData): Promise<{ ok: bo
     booking_success: {
       sms: formData.get("booking_success_sms") === "on",
       email: formData.get("booking_success_email") === "on",
+      whatsapp: formData.get("booking_success_whatsapp") === "on",
     },
     booking_deferred: {
       sms: formData.get("booking_deferred_sms") === "on",
       email: formData.get("booking_deferred_email") === "on",
+      whatsapp: formData.get("booking_deferred_whatsapp") === "on",
     },
     booking_cancelled: {
       sms: formData.get("booking_cancelled_sms") === "on",
       email: formData.get("booking_cancelled_email") === "on",
+      whatsapp: formData.get("booking_cancelled_whatsapp") === "on",
     },
     booking_failure: {
       sms: formData.get("booking_failure_sms") === "on",
       email: formData.get("booking_failure_email") === "on",
+      whatsapp: formData.get("booking_failure_whatsapp") === "on",
     },
     watch_resync: {
       sms: formData.get("watch_resync_sms") === "on",
       email: formData.get("watch_resync_email") === "on",
+      whatsapp: formData.get("watch_resync_whatsapp") === "on",
     },
   };
   await setNotifPrefs(userId, prefs);

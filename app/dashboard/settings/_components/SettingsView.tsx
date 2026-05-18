@@ -408,7 +408,7 @@ function NotifsSection({
 
   const updatePref = (
     type: keyof NotifPrefs,
-    channel: "sms" | "email",
+    channel: "sms" | "email" | "whatsapp",
     value: boolean,
   ) => {
     const next: NotifPrefs = {
@@ -420,6 +420,7 @@ function NotifsSection({
     (Object.keys(next) as Array<keyof NotifPrefs>).forEach((t) => {
       if (next[t].sms) fd.set(`${t}_sms`, "on");
       if (next[t].email) fd.set(`${t}_email`, "on");
+      if (next[t].whatsapp) fd.set(`${t}_whatsapp`, "on");
     });
     startTransition(async () => {
       await saveNotifPrefsAction(fd);
@@ -428,7 +429,10 @@ function NotifsSection({
     });
   };
 
-  const failureBothOff = !prefs.booking_failure.sms && !prefs.booking_failure.email;
+  const failureBothOff =
+    !prefs.booking_failure.sms &&
+    !prefs.booking_failure.email &&
+    !prefs.booking_failure.whatsapp;
 
   return (
     <section>
@@ -453,8 +457,10 @@ function NotifsSection({
           desc="Quand une salle est bookée pour toi."
           smsOn={prefs.booking_success.sms}
           emailOn={prefs.booking_success.email}
+          whatsappOn={prefs.booking_success.whatsapp}
           onSms={(v) => updatePref("booking_success", "sms", v)}
           onEmail={(v) => updatePref("booking_success", "email", v)}
+          onWhatsapp={(v) => updatePref("booking_success", "whatsapp", v)}
           hasPhone={!!telephone}
         />
         <NotifTypeCard
@@ -462,8 +468,10 @@ function NotifsSection({
           desc="Quand un meeting est créé plus de 10 jours à l'avance — on attend que Skedda ouvre la fenêtre pour booker."
           smsOn={prefs.booking_deferred.sms}
           emailOn={prefs.booking_deferred.email}
+          whatsappOn={prefs.booking_deferred.whatsapp}
           onSms={(v) => updatePref("booking_deferred", "sms", v)}
           onEmail={(v) => updatePref("booking_deferred", "email", v)}
+          onWhatsapp={(v) => updatePref("booking_deferred", "whatsapp", v)}
           hasPhone={!!telephone}
         />
         <NotifTypeCard
@@ -471,8 +479,10 @@ function NotifsSection({
           desc="Quand tu supprimes un meeting dans Calendar et qu'on libère la salle sur Skedda."
           smsOn={prefs.booking_cancelled.sms}
           emailOn={prefs.booking_cancelled.email}
+          whatsappOn={prefs.booking_cancelled.whatsapp}
           onSms={(v) => updatePref("booking_cancelled", "sms", v)}
           onEmail={(v) => updatePref("booking_cancelled", "email", v)}
+          onWhatsapp={(v) => updatePref("booking_cancelled", "whatsapp", v)}
           hasPhone={!!telephone}
         />
         <NotifTypeCard
@@ -480,8 +490,10 @@ function NotifsSection({
           desc="Deux meetings sur la même salle, sync cassée, token expiré."
           smsOn={prefs.booking_failure.sms}
           emailOn={prefs.booking_failure.email}
+          whatsappOn={prefs.booking_failure.whatsapp}
           onSms={(v) => updatePref("booking_failure", "sms", v)}
           onEmail={(v) => updatePref("booking_failure", "email", v)}
+          onWhatsapp={(v) => updatePref("booking_failure", "whatsapp", v)}
           hasPhone={!!telephone}
           warning={failureBothOff ? "Tu ne seras pas prévenu si une réservation échoue. Pense à vérifier dans le dashboard." : undefined}
         />
@@ -490,8 +502,10 @@ function NotifsSection({
           desc="Quand on remet ton calendrier d'aplomb tout seul."
           smsOn={prefs.watch_resync.sms}
           emailOn={prefs.watch_resync.email}
+          whatsappOn={prefs.watch_resync.whatsapp}
           onSms={(v) => updatePref("watch_resync", "sms", v)}
           onEmail={(v) => updatePref("watch_resync", "email", v)}
+          onWhatsapp={(v) => updatePref("watch_resync", "whatsapp", v)}
           hasPhone={!!telephone}
         />
       </div>
@@ -581,8 +595,10 @@ function NotifTypeCard({
   desc,
   smsOn,
   emailOn,
+  whatsappOn,
   onSms,
   onEmail,
+  onWhatsapp,
   hasPhone,
   warning,
 }: {
@@ -590,15 +606,17 @@ function NotifTypeCard({
   desc: string;
   smsOn: boolean;
   emailOn: boolean;
+  whatsappOn: boolean;
   onSms: (v: boolean) => void;
   onEmail: (v: boolean) => void;
+  onWhatsapp: (v: boolean) => void;
   hasPhone: boolean;
   warning?: string;
 }) {
   return (
     <div
       className="rule-row"
-      data-active={smsOn || emailOn}
+      data-active={smsOn || emailOn || whatsappOn}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -616,6 +634,13 @@ function NotifTypeCard({
           label="SMS"
           on={smsOn}
           onChange={onSms}
+          disabled={!hasPhone}
+          disabledHint="Ajoute un numéro dans Mon compte"
+        />
+        <ChannelToggle
+          label="WhatsApp"
+          on={whatsappOn}
+          onChange={onWhatsapp}
           disabled={!hasPhone}
           disabledHint="Ajoute un numéro dans Mon compte"
         />

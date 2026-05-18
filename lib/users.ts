@@ -27,6 +27,7 @@ export type NotifType =
 export interface ChannelPrefs {
   sms: boolean;
   email: boolean;
+  whatsapp: boolean;
 }
 export interface NotifPrefs {
   booking_success: ChannelPrefs;
@@ -37,11 +38,11 @@ export interface NotifPrefs {
 }
 export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   // Conservative defaults — see product spec.
-  booking_success: { sms: false, email: true }, // not urgent, traceable, includes magic cancel link
-  booking_failure: { sms: true, email: true },  // critical: action required
-  booking_cancelled: { sms: false, email: true }, // mirror of booking_success — confirms cancel went through
-  booking_deferred: { sms: true, email: true },  // ONLY signal during 10 days — SMS is non-negotiable
-  watch_resync: { sms: false, email: false },   // technical, no action needed
+  booking_success: { sms: false, email: true, whatsapp: false }, // not urgent, traceable, includes magic cancel link
+  booking_failure: { sms: true, email: true, whatsapp: false },  // critical: action required
+  booking_cancelled: { sms: false, email: true, whatsapp: false }, // mirror of booking_success — confirms cancel went through
+  booking_deferred: { sms: true, email: true, whatsapp: false },  // ONLY signal during 10 days — SMS is non-negotiable
+  watch_resync: { sms: false, email: false, whatsapp: false },   // technical, no action needed
 };
 
 /**

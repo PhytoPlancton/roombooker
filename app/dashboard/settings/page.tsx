@@ -1,8 +1,23 @@
 import { redirect } from "next/navigation";
 import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/session";
-import { findUserById, DEFAULT_BOOKING_RULES, DEFAULT_ROOM_PRIORITY, DEFAULT_NOTIF_PREFS } from "@/lib/users";
+import { findUserById, DEFAULT_BOOKING_RULES, DEFAULT_ROOM_PRIORITY, DEFAULT_NOTIF_PREFS, type NotifPrefs, type NotifType } from "@/lib/users";
 import { SettingsView } from "./_components/SettingsView";
+
+/**
+ * Merge a partially-stored prefs object with DEFAULT_NOTIF_PREFS, **per type
+ * AND per channel**. A shallow merge would drop newly-added channels (e.g.
+ * "whatsapp" was added in v0.10.29 — users whose doc was written before that
+ * have ChannelPrefs without it). This deep merge guarantees the client
+ * component always receives a complete shape.
+ */
+function fillNotifPrefs(stored: Partial<NotifPrefs> | undefined): NotifPrefs {
+  const out = {} as NotifPrefs;
+  for (const t of Object.keys(DEFAULT_NOTIF_PREFS) as NotifType[]) {
+    out[t] = { ...DEFAULT_NOTIF_PREFS[t], ...(stored?.[t] ?? {}) };
+  }
+  return out;
+}
 
 interface PageProps {
   searchParams: Promise<{ section?: string; success?: string; error?: string }>;
@@ -32,7 +47,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       priority={user.roomPriority ?? DEFAULT_ROOM_PRIORITY}
       roomLocationMode={user.roomLocationMode ?? "location"}
       skeddaTitleMode={user.skeddaTitleMode ?? "none"}
-      notifPrefs={{ ...DEFAULT_NOTIF_PREFS, ...(user.notifPrefs ?? {}) }}
+      notifPrefs={fillNotifPrefs(user.notifPrefs)}
       watchActive={watchActive}
       watchExpiryISO={watchExpiryISO}
       initialSection={section || "connections"}
