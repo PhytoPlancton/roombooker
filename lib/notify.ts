@@ -5,6 +5,7 @@
 
 import { audit } from "./audit";
 import { DEFAULT_NOTIF_PREFS, type NotifType, type NotifPrefs } from "./users";
+import { getChannelAvailability } from "./service-state";
 import type { ObjectId } from "mongodb";
 
 interface SmsArgs {
@@ -145,8 +146,11 @@ export async function notifyUser(args: {
   // booking_cancelled added in v0.10.14), fall back to the default for THAT
   // type only — not the whole prefs object — so we never crash on missing keys.
   const prefs = user.notifPrefs?.[type] ?? DEFAULT_NOTIF_PREFS[type];
+  // Admin can globally pause a channel (provider outage, maintenance). Read
+  // the singleton once and gate each send below.
+  const availability = await getChannelAvailability();
 
-  if (prefs.sms && user.telephone) {
+  if (prefs.sms && user.telephone && availability.sms) {
     const r = await sendSms({ phoneNumber: user.telephone, text: smsText });
     await audit({
       action: r.success ? "notify_sent" : "error",
@@ -157,7 +161,7 @@ export async function notifyUser(args: {
   }
   // `whatsapp` is optional on ChannelPrefs for backward-compat with users
   // whose stored prefs predate the WhatsApp channel (added in v0.10.29).
-  if ((prefs as { whatsapp?: boolean }).whatsapp && user.telephone) {
+  if ((prefs as { whatsapp?: boolean }).whatsapp && user.telephone && availability.whatsapp) {
     const r = await sendWhatsapp({ phoneNumber: user.telephone, text: smsText });
     await audit({
       action: r.success ? "notify_sent" : "error",
@@ -166,7 +170,7 @@ export async function notifyUser(args: {
       details: { channel: "whatsapp", type, to: user.telephone, success: r.success, error: r.error },
     });
   }
-  if (prefs.email) {
+  if (prefs.email && availability.email) {
     const r = await sendEmail({
       to: { email: user.email, name: user.firstName },
       subject: emailSubject,

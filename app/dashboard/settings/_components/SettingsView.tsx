@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
 import type { BookingRules, NotifPrefs } from "@/lib/users";
+import type { ChannelAvailability } from "@/lib/service-state";
 import type { RoomName } from "@/lib/bookings";
 import { activateWatchAction, deactivateWatchAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction } from "../../actions";
 import { PriorityDnD } from "./PriorityDnD";
@@ -23,6 +24,7 @@ interface Props {
   roomLocationMode: "location" | "description" | "none";
   skeddaTitleMode: "none" | "anonymized" | "full";
   notifPrefs: NotifPrefs;
+  channelAvailability: ChannelAvailability;
   watchActive: boolean;
   watchExpiryISO: string | null;
   initialSection: string;
@@ -37,7 +39,7 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
-export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, notifPrefs, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, notifPrefs, channelAvailability, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
   const searchParams = useSearchParams();
@@ -90,7 +92,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
         <div className="settings-content">
           {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} watchExpiryISO={watchExpiryISO} />}
           {active === "rules" && <RulesSection rules={rules} priority={priority} />}
-          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} skeddaTitleMode={skeddaTitleMode} notifPrefs={notifPrefs} />}
+          {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} skeddaTitleMode={skeddaTitleMode} notifPrefs={notifPrefs} channelAvailability={channelAvailability} />}
           {active === "account" && <AccountSection user={user} />}
         </div>
       </div>
@@ -369,12 +371,14 @@ function NotifsSection({
   mode,
   skeddaTitleMode,
   notifPrefs,
+  channelAvailability,
 }: {
   telephone: string;
   email: string;
   mode: "location" | "description" | "none";
   skeddaTitleMode: "none" | "anonymized" | "full";
   notifPrefs: NotifPrefs;
+  channelAvailability: ChannelAvailability;
 }) {
   const [current, setCurrent] = useState<"location" | "description" | "none">(mode);
   const [titleMode, setTitleMode] = useState<"none" | "anonymized" | "full">(skeddaTitleMode);
@@ -451,6 +455,25 @@ function NotifsSection({
         )}
       </div>
 
+      {(() => {
+        const paused: string[] = [];
+        if (!channelAvailability.sms) paused.push("SMS");
+        if (!channelAvailability.whatsapp) paused.push("WhatsApp");
+        if (!channelAvailability.email) paused.push("Email");
+        if (paused.length === 0) return null;
+        const list = paused.length === 1
+          ? paused[0]
+          : paused.slice(0, -1).join(", ") + " et " + paused[paused.length - 1];
+        return (
+          <div className="rule-paused-hint" role="status">
+            <Icon.alert size={12} />
+            <span>
+              {list} en pause côté Roombooker — on remet ça dès que possible. Tes choix sont gardés.
+            </span>
+          </div>
+        );
+      })()}
+
       <div className="rule-list" style={{ gap: 12 }}>
         <NotifTypeCard
           title="Réservation confirmée"
@@ -462,6 +485,7 @@ function NotifsSection({
           onEmail={(v) => updatePref("booking_success", "email", v)}
           onWhatsapp={(v) => updatePref("booking_success", "whatsapp", v)}
           hasPhone={!!telephone}
+          availability={channelAvailability}
         />
         <NotifTypeCard
           title="Réservation programmée"
@@ -473,6 +497,7 @@ function NotifsSection({
           onEmail={(v) => updatePref("booking_deferred", "email", v)}
           onWhatsapp={(v) => updatePref("booking_deferred", "whatsapp", v)}
           hasPhone={!!telephone}
+          availability={channelAvailability}
         />
         <NotifTypeCard
           title="Réservation annulée"
@@ -484,6 +509,7 @@ function NotifsSection({
           onEmail={(v) => updatePref("booking_cancelled", "email", v)}
           onWhatsapp={(v) => updatePref("booking_cancelled", "whatsapp", v)}
           hasPhone={!!telephone}
+          availability={channelAvailability}
         />
         <NotifTypeCard
           title="Conflit ou erreur"
@@ -496,6 +522,7 @@ function NotifsSection({
           onWhatsapp={(v) => updatePref("booking_failure", "whatsapp", v)}
           hasPhone={!!telephone}
           warning={failureBothOff ? "Tu ne seras pas prévenu si une réservation échoue. Pense à vérifier dans le dashboard." : undefined}
+          availability={channelAvailability}
         />
         <NotifTypeCard
           title="Re-sync automatique"
@@ -507,6 +534,7 @@ function NotifsSection({
           onEmail={(v) => updatePref("watch_resync", "email", v)}
           onWhatsapp={(v) => updatePref("watch_resync", "whatsapp", v)}
           hasPhone={!!telephone}
+          availability={channelAvailability}
         />
       </div>
 
@@ -601,6 +629,7 @@ function NotifTypeCard({
   onWhatsapp,
   hasPhone,
   warning,
+  availability,
 }: {
   title: string;
   desc: string;
@@ -612,6 +641,7 @@ function NotifTypeCard({
   onWhatsapp: (v: boolean) => void;
   hasPhone: boolean;
   warning?: string;
+  availability: ChannelAvailability;
 }) {
   return (
     <div
@@ -636,6 +666,7 @@ function NotifTypeCard({
           onChange={onSms}
           disabled={!hasPhone}
           disabledHint="Ajoute un numéro dans Mon compte"
+          paused={!availability.sms}
         />
         <ChannelToggle
           label="WhatsApp"
@@ -643,11 +674,13 @@ function NotifTypeCard({
           onChange={onWhatsapp}
           disabled={!hasPhone}
           disabledHint="Ajoute un numéro dans Mon compte"
+          paused={!availability.whatsapp}
         />
         <ChannelToggle
           label="Email"
           on={emailOn}
           onChange={onEmail}
+          paused={!availability.email}
         />
       </div>
       {warning && (
@@ -665,36 +698,50 @@ function ChannelToggle({
   onChange,
   disabled,
   disabledHint,
+  paused,
 }: {
   label: string;
   on: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
   disabledHint?: string;
+  /** Admin globally disabled this channel. Toggle stays in its saved position
+   *  but is non-interactive + amber. Distinct from `disabled` (no phone). */
+  paused?: boolean;
 }) {
+  const interactive = !disabled && !paused;
+  const title = paused
+    ? `${label} est en pause côté Roombooker — ton choix est gardé.`
+    : disabled
+      ? disabledHint
+      : undefined;
   return (
     <label
+      className={paused ? "channel-toggle-paused" : undefined}
       style={{
         display: "inline-flex",
         alignItems: "center",
         gap: 8,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
+        cursor: interactive ? "pointer" : "not-allowed",
+        opacity: disabled && !paused ? 0.5 : 1,
       }}
-      title={disabled ? disabledHint : undefined}
+      title={title}
     >
       <button
         className="rule-toggle"
-        data-active={on && !disabled}
-        onClick={() => !disabled && onChange(!on)}
+        data-active={on && interactive}
+        data-paused={paused || undefined}
+        onClick={() => interactive && onChange(!on)}
         aria-pressed={on}
-        aria-label={`${label} ${on ? "activé" : "désactivé"}`}
+        aria-label={`${label} ${on ? "activé" : "désactivé"}${paused ? " (en pause)" : ""}`}
         type="button"
-        disabled={disabled}
+        disabled={!interactive}
       >
         <span className="rule-toggle-dot" />
       </button>
-      <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 500, color: paused ? "var(--ink-3)" : undefined }}>
+        {label}
+      </span>
     </label>
   );
 }

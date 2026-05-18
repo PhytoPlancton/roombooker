@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/session";
 import { findUserById } from "@/lib/users";
 import { getAdminStats } from "@/lib/admin-stats";
+import { getChannelAvailability } from "@/lib/service-state";
 import { AdminView } from "./_components/AdminView";
 
 const ADMIN_EMAIL = "nicolas.monniot@muchbetter.ai";
@@ -14,6 +15,9 @@ export default async function AdminPage() {
   if (!user) redirect("/");
   if (user.email !== ADMIN_EMAIL) redirect("/dashboard");
 
-  const stats = await getAdminStats();
-  return <AdminView stats={stats} />;
+  const [stats, availability] = await Promise.all([
+    getAdminStats(),
+    getChannelAvailability(),
+  ]);
+  return <AdminView stats={stats} availability={availability} />;
 }

@@ -6,6 +6,8 @@ import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
 import type { AdminStats, ActivityItem } from "@/lib/admin-stats";
+import type { ChannelAvailability } from "@/lib/service-state";
+import { setChannelAvailabilityAction } from "../../actions";
 
 function formatHM(minutes: number): { value: string; unit: string } {
   if (minutes <= 0) return { value: "0", unit: "min" };
@@ -36,7 +38,13 @@ function ActivityIcon({ kind }: { kind: ActivityItem["kind"] }) {
   return <span className="activity-dot activity-dot-ok" />;
 }
 
-export function AdminView({ stats }: { stats: AdminStats }) {
+export function AdminView({
+  stats,
+  availability,
+}: {
+  stats: AdminStats;
+  availability: ChannelAvailability;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [refreshedAt, setRefreshedAt] = useState<Date>(new Date());
@@ -146,6 +154,22 @@ export function AdminView({ stats }: { stats: AdminStats }) {
         </div>
       </div>
 
+      <section className="admin-card admin-channels">
+        <div className="admin-card-head">
+          <h2 className="settings-h-sub" style={{ margin: 0 }}>
+            État des canaux de notification
+          </h2>
+          <span className="kpi-meta">
+            Coupe un canal côté Roombooker — tous les users voient le toggle correspondant grisé en pause.
+          </span>
+        </div>
+        <div className="admin-channels-grid">
+          <ChannelKillSwitch channel="sms" label="SMS" on={availability.sms} />
+          <ChannelKillSwitch channel="whatsapp" label="WhatsApp" on={availability.whatsapp} />
+          <ChannelKillSwitch channel="email" label="Email" on={availability.email} />
+        </div>
+      </section>
+
       <div className="admin-secondary">
         <section className="admin-card">
           <div className="admin-card-head">
@@ -214,5 +238,59 @@ export function AdminView({ stats }: { stats: AdminStats }) {
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * Per-channel admin kill switch. Click flips availability via the server
+ * action, then router.refresh() pulls the new server state. Optimistic local
+ * state keeps the UI responsive between click and refresh.
+ */
+function ChannelKillSwitch({
+  channel,
+  label,
+  on,
+}: {
+  channel: "sms" | "whatsapp" | "email";
+  label: string;
+  on: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [local, setLocal] = useState(on);
+  useEffect(() => setLocal(on), [on]);
+
+  const toggle = () => {
+    const next = !local;
+    setLocal(next);
+    const fd = new FormData();
+    fd.set("channel", channel);
+    fd.set("enabled", next ? "on" : "");
+    startTransition(async () => {
+      await setChannelAvailabilityAction(fd);
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className="admin-channel" data-on={local} data-pending={pending || undefined}>
+      <div className="admin-channel-head">
+        <span className="admin-channel-name">{label}</span>
+        <span className={`admin-channel-state ${local ? "is-on" : "is-off"}`}>
+          {local ? "Actif" : "En pause"}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="rule-toggle"
+        data-active={local}
+        aria-pressed={local}
+        aria-label={local ? `Mettre ${label} en pause` : `Réactiver ${label}`}
+        onClick={toggle}
+        disabled={pending}
+      >
+        <span className="rule-toggle-dot" />
+      </button>
+    </div>
   );
 }

@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/session";
 import { activateWatchForUser, deactivateWatchForUser } from "@/lib/watch";
 import { releaseBookingByIdAsUser } from "@/lib/release-booking";
+import { setChannelAvailability, type ChannelAvailability } from "@/lib/service-state";
+import { findUserById } from "@/lib/users";
 import {
   setBookingRules,
   setNotifPrefs,
@@ -199,4 +201,26 @@ export async function deactivateWatchAction(): Promise<void> {
     revalidatePath("/dashboard");
     redirect("/dashboard?success=watch_deactivated");
   }
+}
+
+const ADMIN_EMAIL = "nicolas.monniot@muchbetter.ai";
+
+export async function setChannelAvailabilityAction(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await requireUser();
+  const user = await findUserById(userId);
+  if (!user || user.email !== ADMIN_EMAIL) return { ok: false, error: "forbidden" };
+
+  const rawChannel = formData.get("channel");
+  const rawEnabled = formData.get("enabled");
+  const valid: Array<keyof ChannelAvailability> = ["sms", "email", "whatsapp"];
+  if (typeof rawChannel !== "string" || !(valid as readonly string[]).includes(rawChannel)) {
+    return { ok: false, error: "invalid_channel" };
+  }
+  const channel = rawChannel as keyof ChannelAvailability;
+  const enabled = rawEnabled === "on" || rawEnabled === "true" || rawEnabled === "1";
+
+  await setChannelAvailability(channel, enabled);
+  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
 }

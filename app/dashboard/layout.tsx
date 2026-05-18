@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/session";
 import { findUserById } from "@/lib/users";
-import { listBookingsForUser } from "@/lib/bookings";
 import { Topnav } from "@/components/layout/Topnav";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -12,14 +11,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect("/");
   if (!user.telephone) redirect("/onboarding");
 
-  const bookings = await listBookingsForUser(user._id, 50);
-  const syncedCount = bookings.filter((b) => b.status === "booked").length;
   const userName = `${user.firstName} ${user.lastName}`.trim() || user.email;
   const isAdmin = user.email === "nicolas.monniot@muchbetter.ai";
 
   return (
     <div className="app">
-      <Topnav userName={userName} syncedCount={syncedCount} isAdmin={isAdmin} />
+      <Topnav userName={userName} isAdmin={isAdmin} />
       <main>{children}</main>
     </div>
   );

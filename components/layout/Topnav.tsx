@@ -2,17 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Icon } from "@/components/ui/Icon";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { initials } from "@/lib/ui/format";
 
 interface TopnavProps {
   userName: string;
-  syncedCount: number;
   isAdmin?: boolean;
 }
 
-export function Topnav({ userName, syncedCount, isAdmin }: TopnavProps) {
+export function Topnav({ userName, isAdmin }: TopnavProps) {
   const pathname = usePathname();
   const isDash = pathname === "/dashboard";
   const isSettings = pathname?.startsWith("/dashboard/settings");
@@ -42,10 +40,6 @@ export function Topnav({ userName, syncedCount, isAdmin }: TopnavProps) {
         )}
       </nav>
       <div className="topnav-spacer" />
-      <span className="topnav-status">
-        <span className="status-dot" />
-        <span>Sync active · {syncedCount} events</span>
-      </span>
       <ThemeToggle />
       <Link
         href="/dashboard/settings?section=account"

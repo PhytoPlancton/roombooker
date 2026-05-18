@@ -250,6 +250,22 @@
   flex-shrink: 0;
 }
 .rule-toggle[data-active="true"] { background: var(--brand); }
+
+/* Admin paused a channel globally. Toggle keeps the user's saved position
+ * (data-active drives the dot transform), but the chassis turns grey + the
+ * dot turns amber so it reads as "your choice is preserved, this is paused
+ * by the operator". Non-interactive.
+ */
+.rule-toggle[data-paused="true"] {
+  background: var(--bg-inset);
+  cursor: not-allowed;
+}
+.rule-toggle[data-paused="true"] .rule-toggle-dot {
+  background: var(--warning);
+}
+.rule-toggle[data-paused="true"][data-active="true"] {
+  background: var(--bg-inset);
+}
 .rule-toggle-dot {
   position: absolute;
   top: 2px; left: 2px;
@@ -311,6 +327,29 @@
 [data-mode="dark"] .notif-warning {
   background: rgba(255, 176, 32, 0.18);
   color: #ffc966;
+}
+
+/* Banner shown at the top of the Notifications section listing the channels
+ * the admin has paused. Same amber palette as .notif-warning but full-width
+ * with a slightly stronger top accent. */
+.rule-paused-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius);
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.30);
+  color: #8b5a00;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.rule-paused-hint svg { flex-shrink: 0; color: var(--warning); }
+[data-mode="dark"] .rule-paused-hint {
+  background: rgba(255, 176, 32, 0.18);
+  border-color: rgba(255, 176, 32, 0.35);
+  color: #ffd28a;
 }
 
 /* Account */

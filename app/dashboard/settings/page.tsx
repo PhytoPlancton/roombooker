@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/session";
 import { findUserById, DEFAULT_BOOKING_RULES, DEFAULT_ROOM_PRIORITY, DEFAULT_NOTIF_PREFS, type NotifPrefs, type NotifType } from "@/lib/users";
+import { getChannelAvailability } from "@/lib/service-state";
 import { SettingsView } from "./_components/SettingsView";
 
 /**
@@ -33,6 +34,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
 
   const watchActive = !!user.watchChannelId && !!user.watchExpiry && user.watchExpiry > new Date();
   const watchExpiryISO = user.watchExpiry ? user.watchExpiry.toISOString() : null;
+  const channelAvailability = await getChannelAvailability();
 
   return (
     <SettingsView
@@ -48,6 +50,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       roomLocationMode={user.roomLocationMode ?? "location"}
       skeddaTitleMode={user.skeddaTitleMode ?? "none"}
       notifPrefs={fillNotifPrefs(user.notifPrefs)}
+      channelAvailability={channelAvailability}
       watchActive={watchActive}
       watchExpiryISO={watchExpiryISO}
       initialSection={section || "connections"}

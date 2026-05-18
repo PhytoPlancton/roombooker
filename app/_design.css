@@ -539,6 +539,42 @@ a { color: inherit; }
   font-size: 13px;
 }
 
+/* Channel kill-switches — admin-only section between the KPI row and the
+   activity/team grid. Three equal cells, each with the channel name + a
+   small status pill + the toggle pill itself. */
+.admin-channels { min-height: 0; }
+.admin-channels-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+@media (max-width: 720px) { .admin-channels-grid { grid-template-columns: 1fr; } }
+.admin-channel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.admin-channel[data-on="false"] { background: var(--bg-inset); border-color: var(--line-2); }
+.admin-channel[data-pending="true"] { opacity: 0.65; }
+.admin-channel-head {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.admin-channel-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.admin-channel-state {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.admin-channel-state.is-on { color: var(--success); }
+.admin-channel-state.is-off { color: var(--warning); }
+
 .activity-list {
   list-style: none;
   margin: 0; padding: 0;
