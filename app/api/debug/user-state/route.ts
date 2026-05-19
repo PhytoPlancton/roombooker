@@ -25,20 +25,41 @@ export async function GET(req: NextRequest) {
   }
 
   const db = await getDb();
-  const user = await db.collection("users").findOne({ email });
-  if (!user) {
+  const raw = await db.collection("users").findOne({ email });
+  if (!raw) {
     return NextResponse.json({ error: "user_not_found", email }, { status: 404 });
   }
+  // Cast once through unknown — Mongo's WithId<Document> doesn't overlap with
+  // our domain shape and TS strict mode refuses the direct widening.
+  const u = raw as unknown as {
+    _id: object;
+    email: string;
+    firstName: string;
+    lastName: string;
+    telephone: string | null;
+    googleTokens?: unknown;
+    watchChannelId?: string;
+    watchResourceId?: string;
+    watchExpiry?: Date;
+    watchSyncToken?: string;
+    bookingRules?: unknown;
+    notifPrefs?: unknown;
+    roomLocationMode?: string;
+    skeddaTitleMode?: string;
+    roomPriority?: string[];
+    createdAt: Date;
+    updatedAt: Date;
+  };
 
   const now = new Date();
   const watchActive =
-    !!(user as { watchChannelId?: string }).watchChannelId &&
-    !!(user as { watchExpiry?: Date }).watchExpiry &&
-    new Date((user as { watchExpiry: Date }).watchExpiry).getTime() > now.getTime();
+    !!u.watchChannelId &&
+    !!u.watchExpiry &&
+    new Date(u.watchExpiry).getTime() > now.getTime();
 
   const recentBookings = await db
     .collection("bookings")
-    .find({ userId: user._id })
+    .find({ userId: u._id })
     .sort({ "meeting.startsAt": -1 })
     .limit(5)
     .project({
@@ -53,25 +74,25 @@ export async function GET(req: NextRequest) {
     .toArray();
 
   return NextResponse.json({
-    email: (user as { email: string }).email,
-    firstName: (user as { firstName: string }).firstName,
-    lastName: (user as { lastName: string }).lastName,
-    telephone: (user as { telephone: string | null }).telephone,
-    googleTokensPresent: !!(user as { googleTokens?: unknown }).googleTokens,
+    email: u.email,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    telephone: u.telephone,
+    googleTokensPresent: !!u.googleTokens,
     watch: {
       active: watchActive,
-      channelId: (user as { watchChannelId?: string }).watchChannelId || null,
-      resourceId: (user as { watchResourceId?: string }).watchResourceId || null,
-      expiry: (user as { watchExpiry?: Date }).watchExpiry || null,
-      hasSyncToken: !!(user as { watchSyncToken?: string }).watchSyncToken,
+      channelId: u.watchChannelId || null,
+      resourceId: u.watchResourceId || null,
+      expiry: u.watchExpiry || null,
+      hasSyncToken: !!u.watchSyncToken,
     },
-    bookingRules: (user as { bookingRules?: unknown }).bookingRules ?? null,
-    notifPrefs: (user as { notifPrefs?: unknown }).notifPrefs ?? null,
-    roomLocationMode: (user as { roomLocationMode?: string }).roomLocationMode ?? "(default)",
-    skeddaTitleMode: (user as { skeddaTitleMode?: string }).skeddaTitleMode ?? "(default)",
-    roomPriority: (user as { roomPriority?: string[] }).roomPriority ?? null,
-    createdAt: (user as { createdAt: Date }).createdAt,
-    updatedAt: (user as { updatedAt: Date }).updatedAt,
+    bookingRules: u.bookingRules ?? null,
+    notifPrefs: u.notifPrefs ?? null,
+    roomLocationMode: u.roomLocationMode ?? "(default)",
+    skeddaTitleMode: u.skeddaTitleMode ?? "(default)",
+    roomPriority: u.roomPriority ?? null,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
     recentBookings,
   });
 }

@@ -38,3 +38,6 @@ next-env.d.ts
 debug-screenshots/
 playwright-report/
 test-results/
+
+# Claude worktrees (local agent scratch space, never commit)
+.claude/worktrees/
