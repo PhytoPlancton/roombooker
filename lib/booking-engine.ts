@@ -173,9 +173,12 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       details: { room: room.name, reason: result.reason, errorMessage: result.errorMessage },
     });
 
-    // Only retry the next room if this one was specifically unavailable.
+    // Only retry the next room when this one is room-specific:
+    //  - slot_unavailable   : someone else has it for this slot
+    //  - duration_too_long  : Antler caps some rooms to 1h30 (Mars), so a
+    //                          longer meeting needs to try a different room
     // For form/navigation/timeout/window errors, retrying gives the same result.
-    if (result.reason !== "slot_unavailable") {
+    if (result.reason !== "slot_unavailable" && result.reason !== "duration_too_long") {
       break;
     }
   }
@@ -227,6 +230,8 @@ function errorReasonText(reason: string, lastRoom: RoomName | null): string {
       return "Le créneau est en dehors des horaires d'ouverture de l'incubateur.";
     case "window_too_far":
       return "Le booking est trop loin dans le futur (Skedda limite à 10 jours).";
+    case "duration_too_long":
+      return "Ton meeting est trop long pour les salles disponibles (Antler limite certaines salles à 1h30). Raccourcis-le ou réserve manuellement dans une grande salle.";
     case "form_unexpected":
       return `Le formulaire Skedda a un format inattendu (salle ${lastRoom ?? "?"}).`;
     case "navigation_failed":

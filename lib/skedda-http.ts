@@ -60,6 +60,7 @@ export type BookSkeddaResult =
         | "slot_unavailable"
         | "outside_hours"
         | "window_too_far"
+        | "duration_too_long"
         | "form_unexpected"
         | "navigation_failed"
         | "unknown";
@@ -294,6 +295,14 @@ function classifyError(detail: string): FailReason {
   const t = detail.toLowerCase();
   if (/more than \d+ day/.test(t) || t.includes("booking window")) return "window_too_far";
   if (t.includes("hours of availability") || t.includes("outside")) return "outside_hours";
+  // Per-room max-duration rule, e.g. "bookings for Mars are not allowed if
+  // the duration is greater than 1:30" — Antler limits some rooms to 1h30.
+  if (
+    /duration is greater than/.test(t) ||
+    /bookings for .* are not allowed/.test(t)
+  ) {
+    return "duration_too_long";
+  }
   if (t.includes("clash") || t.includes("already booked") || t.includes("not available") || t.includes("conflict")) {
     return "slot_unavailable";
   }
