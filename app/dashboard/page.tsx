@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { findUserById } from "@/lib/users";
 import { listBookingsForUser } from "@/lib/bookings";
 import { serializeBooking, type EventVM } from "@/lib/ui/serialize";
+import { humanizeError } from "@/lib/error-messages";
 import { DashboardShell } from "./_components/DashboardShell";
 
 interface PageProps {
@@ -30,7 +31,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       user={{ name: userName, email: user.email, firstName: user.firstName }}
       events={events}
       watchActive={watchActive}
-      flashError={error || null}
+      flashError={error ? humanizeError(error) : null}
       flashSuccess={success || null}
     />
   );

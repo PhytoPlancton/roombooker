@@ -49,7 +49,7 @@ export function LandingPage({ flashError }: { flashError: string | null }) {
     <div className="landing">
       {errorVisible && flashError && (
         <div className="landing-error" role="alert">
-          {decodeURIComponent(flashError)}
+          {flashError}
           <button
             className="landing-error-close"
             onClick={() => setErrorVisible(false)}

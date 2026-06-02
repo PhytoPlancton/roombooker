@@ -132,17 +132,31 @@ export async function saveRoomPriorityAction(formData: FormData): Promise<{ ok: 
 
 export async function activateWatchAction(): Promise<void> {
   let success = false;
+  let errorCode: string | null = null;
   try {
     const { userId } = await requireUser();
     await activateWatchForUser(userId);
     success = true;
   } catch (err) {
-    const msg = encodeURIComponent(err instanceof Error ? err.message : "unknown_error");
-    redirect(`/dashboard?error=${msg}`);
+    // Google returns 403 "insufficient permissions" when the user granted
+    // login scopes but skipped Calendar (granular consent boxes). Catch it
+    // explicitly so we can guide them to reconnect with the right perms
+    // instead of dumping a raw error string in their face.
+    const raw = err instanceof Error ? err.message : "unknown_error";
+    const lower = raw.toLowerCase();
+    const isPermissionError =
+      lower.includes("insufficient") ||
+      lower.includes("forbidden") ||
+      lower.includes("permission") ||
+      lower.includes("403");
+    errorCode = isPermissionError ? "missing_calendar_scope" : raw;
   }
   if (success) {
     revalidatePath("/dashboard");
     redirect("/dashboard?success=watch_activated");
+  }
+  if (errorCode) {
+    redirect(`/dashboard?error=${encodeURIComponent(errorCode)}`);
   }
 }
 

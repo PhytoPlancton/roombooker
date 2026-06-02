@@ -38,11 +38,28 @@ export async function exchangeCodeForTokens(code: string) {
   if (!tokens.access_token || !tokens.refresh_token) {
     throw new Error("Missing tokens in Google response (was the user prompted for consent?)");
   }
+  // Google returns the actually-granted scopes as a space-separated string.
+  // Important: the user can untick individual scope boxes on the consent
+  // screen, so we MUST verify they granted what we need rather than trust
+  // the scope set we requested.
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + 3600 * 1000),
+    grantedScopes: (tokens.scope ?? "").split(/\s+/).filter(Boolean),
   };
+}
+
+/**
+ * The non-negotiable scope: without it the calendar watch + sync simply
+ * cannot work. userinfo.email/profile are nice-to-have for login UX but
+ * they don't gate the product.
+ */
+export const REQUIRED_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+
+/** True iff the user granted the Calendar-events scope (read/write). */
+export function hasRequiredScope(grantedScopes: string[]): boolean {
+  return grantedScopes.includes(REQUIRED_SCOPE);
 }
 
 export async function fetchUserInfo(accessToken: string) {

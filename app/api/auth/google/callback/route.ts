@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { exchangeCodeForTokens, fetchUserInfo } from "@/lib/google";
+import { exchangeCodeForTokens, fetchUserInfo, hasRequiredScope } from "@/lib/google";
 import { getSession } from "@/lib/session";
 import { upsertUserOnLogin } from "@/lib/users";
+import { audit } from "@/lib/audit";
 
 function publicBase(req: NextRequest): string {
   // Always prefer PUBLIC_APP_URL — req.url reflects the internal container address (0.0.0.0:3000)
@@ -34,6 +35,27 @@ export async function GET(req: NextRequest) {
 
   try {
     const tokens = await exchangeCodeForTokens(code);
+
+    // Hard-stop if the user un-ticked the Calendar permission on the consent
+    // screen (Google lets them do this per-scope since 2020). Without
+    // calendar.events the watch can't be created and no booking will ever
+    // fire — better to refuse the login than save a half-broken user doc
+    // that fails silently later.
+    if (!hasRequiredScope(tokens.grantedScopes)) {
+      const profile = await fetchUserInfo(tokens.accessToken).catch(() => null);
+      await audit({
+        action: "error",
+        details: {
+          where: "oauth_callback",
+          reason: "missing_calendar_scope",
+          email: profile?.email ?? null,
+          grantedScopes: tokens.grantedScopes,
+        },
+      });
+      await session.save();
+      return NextResponse.redirect(`${base}/?error=missing_calendar_scope`);
+    }
+
     const profile = await fetchUserInfo(tokens.accessToken);
 
     const user = await upsertUserOnLogin({
