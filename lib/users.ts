@@ -101,6 +101,15 @@ export interface UserDoc {
    *  - "full": send the raw title verbatim
    */
   skeddaTitleMode?: "none" | "anonymized" | "full";
+  /**
+   * Safety buffer (in minutes) applied around the Google Calendar event when
+   * reserving on Skedda. The Calendar meeting time stays unchanged — only the
+   * Skedda booking is extended `bufferMinutes` before AND after. Useful for
+   * setup, demo overruns, or walking between rooms.
+   *  - undefined / 0 (default): no buffer, Skedda matches Calendar exactly
+   *  - 15: reserve 15 min before and 15 min after (total +30 min on Skedda)
+   */
+  bufferMinutes?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -221,6 +230,14 @@ export async function setSkeddaTitleMode(
   await col.updateOne(
     { _id: userId },
     { $set: { skeddaTitleMode: mode, updatedAt: new Date() } },
+  );
+}
+
+export async function setBufferMinutes(userId: ObjectId, minutes: number): Promise<void> {
+  const col = await usersCol();
+  await col.updateOne(
+    { _id: userId },
+    { $set: { bufferMinutes: minutes, updatedAt: new Date() } },
   );
 }
 

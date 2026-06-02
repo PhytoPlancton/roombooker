@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
     notifPrefs?: unknown;
     roomLocationMode?: string;
     skeddaTitleMode?: string;
+    bufferMinutes?: number;
     roomPriority?: string[];
     createdAt: Date;
     updatedAt: Date;
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
     notifPrefs: u.notifPrefs ?? null,
     roomLocationMode: u.roomLocationMode ?? "(default)",
     skeddaTitleMode: u.skeddaTitleMode ?? "(default)",
+    bufferMinutes: u.bufferMinutes ?? 0,
     roomPriority: u.roomPriority ?? null,
     createdAt: u.createdAt,
     updatedAt: u.updatedAt,

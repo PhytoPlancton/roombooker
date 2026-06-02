@@ -49,6 +49,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       priority={user.roomPriority ?? DEFAULT_ROOM_PRIORITY}
       roomLocationMode={user.roomLocationMode ?? "location"}
       skeddaTitleMode={user.skeddaTitleMode ?? "none"}
+      bufferMinutes={user.bufferMinutes ?? 0}
       notifPrefs={fillNotifPrefs(user.notifPrefs)}
       channelAvailability={channelAvailability}
       watchActive={watchActive}

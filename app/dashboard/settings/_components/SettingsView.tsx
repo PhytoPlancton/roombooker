@@ -7,7 +7,7 @@ import { initials } from "@/lib/ui/format";
 import type { BookingRules, NotifPrefs } from "@/lib/users";
 import type { ChannelAvailability } from "@/lib/service-state";
 import type { RoomName } from "@/lib/bookings";
-import { activateWatchAction, deactivateWatchAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction, testChannelAction } from "../../actions";
+import { activateWatchAction, deactivateWatchAction, saveBufferAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction, testChannelAction } from "../../actions";
 import { PriorityDnD } from "./PriorityDnD";
 import { PhoneEditor } from "./PhoneEditor";
 
@@ -23,6 +23,7 @@ interface Props {
   priority: RoomName[];
   roomLocationMode: "location" | "description" | "none";
   skeddaTitleMode: "none" | "anonymized" | "full";
+  bufferMinutes: number;
   notifPrefs: NotifPrefs;
   channelAvailability: ChannelAvailability;
   watchActive: boolean;
@@ -39,7 +40,7 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
-export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, notifPrefs, channelAvailability, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, bufferMinutes, notifPrefs, channelAvailability, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
   const searchParams = useSearchParams();
@@ -91,7 +92,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
 
         <div className="settings-content">
           {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} watchExpiryISO={watchExpiryISO} />}
-          {active === "rules" && <RulesSection rules={rules} priority={priority} />}
+          {active === "rules" && <RulesSection rules={rules} priority={priority} bufferMinutes={bufferMinutes} />}
           {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} skeddaTitleMode={skeddaTitleMode} notifPrefs={notifPrefs} channelAvailability={channelAvailability} />}
           {active === "account" && <AccountSection user={user} />}
         </div>
@@ -227,9 +228,19 @@ function ConnectionsSection({
   );
 }
 
-function RulesSection({ rules, priority }: { rules: BookingRules; priority: RoomName[] }) {
+function RulesSection({
+  rules,
+  priority,
+  bufferMinutes,
+}: {
+  rules: BookingRules;
+  priority: RoomName[];
+  bufferMinutes: number;
+}) {
   const [order, setOrder] = useState<RoomName[]>(priority);
   const [savedHint, setSavedHint] = useState(false);
+  const [bufferOn, setBufferOn] = useState(bufferMinutes >= 15);
+  const [bufferSavedHint, setBufferSavedHint] = useState(false);
   const [, startTransition] = useTransition();
 
   const handleOrderChange = (next: RoomName[]) => {
@@ -242,6 +253,18 @@ function RulesSection({ rules, priority }: { rules: BookingRules; priority: Room
         setSavedHint(true);
         setTimeout(() => setSavedHint(false), 1500);
       }
+    });
+  };
+
+  const handleBufferToggle = () => {
+    const next = !bufferOn;
+    setBufferOn(next);
+    const fd = new FormData();
+    if (next) fd.set("enabled", "on");
+    startTransition(async () => {
+      await saveBufferAction(fd);
+      setBufferSavedHint(true);
+      setTimeout(() => setBufferSavedHint(false), 1500);
     });
   };
 
@@ -290,6 +313,46 @@ function RulesSection({ rules, priority }: { rules: BookingRules; priority: Room
           <Icon.check size={14} /> Enregistrer les règles
         </button>
       </form>
+
+      <div className="settings-divider" />
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+        <h3 className="settings-h-sub" style={{ margin: 0 }}>Marge de sécurité</h3>
+        {bufferSavedHint && (
+          <span style={{ fontSize: 12, color: "var(--success)" }}>
+            <Icon.check size={11} /> enregistré
+          </span>
+        )}
+      </div>
+
+      <div
+        className="rule-row"
+        data-active={bufferOn}
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+          padding: "14px 16px",
+        }}
+      >
+        <button
+          className="rule-toggle"
+          data-active={bufferOn}
+          onClick={handleBufferToggle}
+          aria-pressed={bufferOn}
+          aria-label={bufferOn ? "Désactiver la marge de sécurité" : "Activer la marge de sécurité"}
+          type="button"
+        >
+          <span className="rule-toggle-dot" />
+        </button>
+        <div style={{ flex: 1 }}>
+          <div className="toggle-row-title">Bloquer 15 min avant et après chaque meeting</div>
+          <div className="toggle-row-desc">
+            Pratique pour préparer la démo, gérer un débord, ou rejoindre la salle suivante sans courir.
+            Le meeting Google reste à l'heure exacte — seule la salle Skedda est réservée plus large.
+          </div>
+        </div>
+      </div>
 
       <div className="settings-divider" />
 

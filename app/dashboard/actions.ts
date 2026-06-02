@@ -14,6 +14,7 @@ import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
 import {
   setBookingRules,
+  setBufferMinutes,
   setNotifPrefs,
   setRoomLocationMode,
   setRoomPriority,
@@ -100,6 +101,20 @@ export async function saveSkeddaTitleModeAction(formData: FormData): Promise<{ o
   type Mode = typeof valid[number];
   const mode = (typeof raw === "string" && (valid as readonly string[]).includes(raw) ? raw : "none") as Mode;
   await setSkeddaTitleMode(userId, mode);
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+/**
+ * Toggle the safety-buffer feature. Stored as minutes — currently 0 (off)
+ * or 15 (on); the field accepts any positive number to keep the door open
+ * for "Custom" UI in V2.
+ */
+export async function saveBufferAction(formData: FormData): Promise<{ ok: boolean }> {
+  const { userId } = await requireUser();
+  const raw = formData.get("enabled");
+  const enabled = raw === "on" || raw === "true" || raw === "1";
+  await setBufferMinutes(userId, enabled ? 15 : 0);
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }

@@ -99,6 +99,32 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     spaceId: ROOM_SPACE_IDS[name],
   }));
 
+  // Safety buffer: when enabled, extend the Skedda booking by `bufferMinutes`
+  // before AND after the Calendar event. Calendar event stays untouched —
+  // only the Skedda reservation gets the wider slot. Useful for setup,
+  // demo overruns, or walking to the next room.
+  const bufferMin = Math.max(0, user.bufferMinutes ?? 0);
+  const skeddaStartsAt = bufferMin > 0
+    ? new Date(args.meeting.startsAt.getTime() - bufferMin * 60_000)
+    : args.meeting.startsAt;
+  const skeddaEndsAt = bufferMin > 0
+    ? new Date(args.meeting.endsAt.getTime() + bufferMin * 60_000)
+    : args.meeting.endsAt;
+  if (bufferMin > 0) {
+    await audit({
+      action: "buffer_applied",
+      userId: args.userId,
+      iCalUID: args.iCalUID,
+      details: {
+        bufferMinutes: bufferMin,
+        calendarStartsAt: args.meeting.startsAt.toISOString(),
+        calendarEndsAt: args.meeting.endsAt.toISOString(),
+        skeddaStartsAt: skeddaStartsAt.toISOString(),
+        skeddaEndsAt: skeddaEndsAt.toISOString(),
+      },
+    });
+  }
+
   let lastResult: BookSkeddaResult | null = null;
   let lastRoom: RoomName | null = null;
 
@@ -112,8 +138,8 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     const result = await bookSkeddaHttp({
       room: room.name,
       spaceId: room.spaceId,
-      startsAt: args.meeting.startsAt,
-      endsAt: args.meeting.endsAt,
+      startsAt: skeddaStartsAt,
+      endsAt: skeddaEndsAt,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
