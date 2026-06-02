@@ -61,6 +61,7 @@ export type BookSkeddaResult =
         | "outside_hours"
         | "window_too_far"
         | "duration_too_long"
+        | "quota_exceeded"
         | "form_unexpected"
         | "navigation_failed"
         | "unknown";
@@ -302,6 +303,23 @@ function classifyError(detail: string): FailReason {
     /bookings for .* are not allowed/.test(t)
   ) {
     return "duration_too_long";
+  }
+  // Skedda tag-policy / credit-allowance / monthly-quota rejections. We
+  // haven't seen one in prod yet, but a teammate's personal Skedda account
+  // does have a cap — Antler likely enabled this at venue level and it'll
+  // bite eventually. Patterns kept generous to catch whatever wording
+  // Skedda uses (their phrasing varies by venue policy template).
+  if (
+    /booking credit/i.test(t) ||
+    /credit.*remain/i.test(t) ||
+    /credit.*allowance/i.test(t) ||
+    /allowance.*exceed/i.test(t) ||
+    /monthly.*(quota|limit|booking)/i.test(t) ||
+    /(quota|limit) (exceeded|reached)/i.test(t) ||
+    /tag policy/i.test(t) ||
+    /booking allowance/i.test(t)
+  ) {
+    return "quota_exceeded";
   }
   if (t.includes("clash") || t.includes("already booked") || t.includes("not available") || t.includes("conflict")) {
     return "slot_unavailable";

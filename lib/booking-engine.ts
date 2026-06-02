@@ -232,6 +232,8 @@ function errorReasonText(reason: string, lastRoom: RoomName | null): string {
       return "Le booking est trop loin dans le futur (Skedda limite à 10 jours).";
     case "duration_too_long":
       return "Ton meeting est trop long pour les salles disponibles (Antler limite certaines salles à 1h30). Raccourcis-le ou réserve manuellement dans une grande salle.";
+    case "quota_exceeded":
+      return "T'as atteint ton quota Skedda (crédits ou limite mensuelle). Réserve manuellement sur Skedda si t'as encore des crédits, ou attends le prochain mois.";
     case "form_unexpected":
       return `Le formulaire Skedda a un format inattendu (salle ${lastRoom ?? "?"}).`;
     case "navigation_failed":
