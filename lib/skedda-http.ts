@@ -328,6 +328,35 @@ function classifyError(detail: string): FailReason {
   return "unknown";
 }
 
+/**
+ * Pick a displayed name variant deterministically from a seed. Used to dodge
+ * Skedda's potential per-name booking quota (Cas B): "Nicolas Monniot" and
+ * "N Monniot" look like different bookers to a name-deduping policy, even
+ * though Antler admin can still trace any variant back to the same person.
+ *
+ * Same (iCalUID, room) always yields the same variant — Antler admin sees a
+ * stable attribution per meeting, no "is this 5 different people?" confusion.
+ * Different meetings or different rooms rotate through ~5 variants.
+ */
+export function pickNameVariant(
+  first: string,
+  last: string,
+  seed: string,
+): { firstName: string; lastName: string } {
+  if (!first || !last) return { firstName: first, lastName: last };
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = ((hash * 31) + seed.charCodeAt(i)) | 0;
+  const f1 = first[0].toUpperCase();
+  const l1 = last[0].toUpperCase();
+  switch (Math.abs(hash) % 5) {
+    case 0: return { firstName: first, lastName: last };           // Nicolas Monniot
+    case 1: return { firstName: f1, lastName: last };              // N Monniot
+    case 2: return { firstName: first, lastName: l1 };             // Nicolas M
+    case 3: return { firstName: last, lastName: first };           // Monniot Nicolas
+    default: return { firstName: f1 + ".", lastName: last };       // N. Monniot
+  }
+}
+
 export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaResult> {
   try {
     await step(args, "bootstrap");
@@ -349,9 +378,18 @@ export async function bookSkeddaHttp(args: BookSkeddaArgs): Promise<BookSkeddaRe
     const startSeed = String(args.startsAt.getTime()).slice(-7);
     const guestEmail = `rb-${baseSeed}-${args.room.toLowerCase()}-${startSeed}@example.com`;
 
+    // Rotate displayed name variants (Cas B safety — dodges a hypothetical
+    // per-name quota at Antler). Same meeting + room always renders the same
+    // variant for consistency in the venue admin view.
+    const { firstName: displayFirst, lastName: displayLast } = pickNameVariant(
+      args.firstName,
+      args.lastName,
+      `${args.iCalUID || args.email}-${args.room}`,
+    );
+
     const { venueUserId, antiForgeryToken } = await createGuestVenueUser(session, publicRegisterPayload, {
-      firstName: args.firstName, // real sales' first name (visible: "Nicolas M")
-      lastName: args.lastName,
+      firstName: displayFirst, // rotated variant of the sales' real first name
+      lastName: displayLast,
       email: guestEmail,         // anonymized email — Skedda dedupes guests by email
       telephone: args.telephone, // real phone (used by venue admin if needed, not public)
     });
