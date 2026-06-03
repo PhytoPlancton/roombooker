@@ -78,7 +78,12 @@ export async function getAdminStats(): Promise<AdminStats> {
       { $group: { _id: "$userId", count: { $sum: 1 } } },
     ]).toArray(),
     usersCol.find({}, { projection: { firstName: 1, lastName: 1, email: 1, watchExpiry: 1 } }).toArray(),
-    bookingsCol.find({ status: "booked" }).sort({ createdAt: -1 }).limit(1).toArray(),
+    // `updatedAt` is the time the doc transitioned to "booked" (i.e. when
+    // the Skedda reservation actually went through). `createdAt` would be
+    // when we first received the meeting from the webhook, which can be
+    // days earlier if the user scheduled the meeting in advance — that's
+    // what made the "Dernière" column look stale.
+    bookingsCol.find({ status: "booked" }).sort({ updatedAt: -1 }).limit(1).toArray(),
   ]);
 
   const minutesSaved = bookingsBooked * MINUTES_SAVED_PER_BOOKING;
@@ -88,11 +93,13 @@ export async function getAdminStats(): Promise<AdminStats> {
     bookingsByUser.set(String(r._id), r.count);
   }
 
-  // Per-user "last booking" lookup
+  // Per-user "last booking" lookup. Uses `updatedAt` (= the moment Skedda
+  // confirmed the reservation), not `createdAt` (= the moment the meeting
+  // was first received from the webhook, often days earlier).
   const lastBookingByUser = await bookingsCol.aggregate([
     { $match: { status: "booked" } },
-    { $sort: { createdAt: -1 } },
-    { $group: { _id: "$userId", last: { $first: "$createdAt" } } },
+    { $sort: { updatedAt: -1 } },
+    { $group: { _id: "$userId", last: { $first: "$updatedAt" } } },
   ]).toArray() as Array<{ _id: unknown; last: Date }>;
   const lastByUser = new Map<string, Date>();
   for (const r of lastBookingByUser) {
@@ -125,8 +132,8 @@ export async function getAdminStats(): Promise<AdminStats> {
   });
   users.sort((a, b) => b.bookings - a.bookings);
 
-  const firstBooking = lastBookingDoc[0] as unknown as { createdAt?: Date } | undefined;
-  const lastActivity = firstBooking?.createdAt ? new Date(firstBooking.createdAt) : null;
+  const firstBooking = lastBookingDoc[0] as unknown as { updatedAt?: Date } | undefined;
+  const lastActivity = firstBooking?.updatedAt ? new Date(firstBooking.updatedAt) : null;
 
   // Recent activity feed: merge top 10 from bookings + audit errors
   const [recentBookings, recentErrors] = await Promise.all([
