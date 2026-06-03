@@ -17,6 +17,7 @@ export type AuditAction =
   | "skedda_success"
   | "skedda_failure"
   | "buffer_applied"
+  | "buffer_fallback"
   | "notify_sent"
   | "watch_activated"
   | "watch_deactivated"

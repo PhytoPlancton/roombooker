@@ -125,91 +125,148 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     });
   }
 
-  let lastResult: BookSkeddaResult | null = null;
-  let lastRoom: RoomName | null = null;
-
-  for (const room of roomsToTry) {
-    await audit({
-      action: "skedda_attempt",
-      userId: args.userId,
-      iCalUID: args.iCalUID,
-      details: { room: room.name, spaceId: room.spaceId },
-    });
-    const result = await bookSkeddaHttp({
-      room: room.name,
-      spaceId: room.spaceId,
-      startsAt: skeddaStartsAt,
-      endsAt: skeddaEndsAt,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      telephone: user.telephone || "",
-      skeddaTitle: computeSkeddaTitle(args.meeting.title, user.skeddaTitleMode ?? "none"),
-      iCalUID: args.iCalUID,
-      userId: args.userId,
-    });
-
-    lastResult = result;
-    lastRoom = room.name;
-
-    if (result.success) {
+  /**
+   * Walk the priority list, attempting to book each room for the given
+   * Skedda slot. Returns as soon as one room succeeds, or when a
+   * non-retryable error breaks the chain. Pure side-effects: audits
+   * each attempt + per-room failure, but doesn't flip the booking
+   * status itself — the caller is responsible for that.
+   */
+  const tryAllRoomsForSlot = async (
+    startsAt: Date,
+    endsAt: Date,
+  ): Promise<
+    | { success: true; room: RoomName; result: BookSkeddaResult & { success: true } }
+    | { success: false; lastResult: BookSkeddaResult | null; lastRoom: RoomName | null }
+  > => {
+    let lastResult: BookSkeddaResult | null = null;
+    let lastRoom: RoomName | null = null;
+    for (const room of roomsToTry) {
       await audit({
-        action: "skedda_success",
+        action: "skedda_attempt",
         userId: args.userId,
         iCalUID: args.iCalUID,
-        details: { room: room.name, skeddaBookingId: result.skeddaBookingId },
+        details: { room: room.name, spaceId: room.spaceId },
       });
-      await markBookingResult({
+      const result = await bookSkeddaHttp({
+        room: room.name,
+        spaceId: room.spaceId,
+        startsAt,
+        endsAt,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        telephone: user.telephone || "",
+        skeddaTitle: computeSkeddaTitle(args.meeting.title, user.skeddaTitleMode ?? "none"),
         iCalUID: args.iCalUID,
-        status: "booked",
-        room: room.name,
-        skeddaBookingRef: result.skeddaBookingId,
-        skeddaCancelToken: result.cancelToken,
-        skeddaCookies: result.cookies,
+        userId: args.userId,
       });
-      await applyRoomToCalendarEvent({
-        user,
-        eventId: args.googleEventId,
-        room: room.name,
-      }).catch((err) => {
-        audit({
-          action: "error",
-          userId: args.userId,
-          iCalUID: args.iCalUID,
-          details: { where: "applyRoomToCalendarEvent", message: String(err) },
-        });
-      });
-      const persisted = await findBookingByICalUID(args.iCalUID);
-      if (persisted) {
-        await notifySuccess(user, args, room.name, persisted._id);
+      lastResult = result;
+      lastRoom = room.name;
+      if (result.success) {
+        return { success: true, room: room.name, result };
       }
       await audit({
-        action: "booking_engine_finished",
+        action: "skedda_failure",
         userId: args.userId,
         iCalUID: args.iCalUID,
-        details: { result: "booked", room: room.name },
+        details: { room: room.name, reason: result.reason, errorMessage: result.errorMessage },
       });
-      return;
+      // Only retry the next room when this one is room-specific:
+      //  - slot_unavailable   : someone else has it for this slot
+      //  - duration_too_long  : Antler caps some rooms to 1h30 (Mars), so a
+      //                          longer meeting needs to try a different room
+      // For form/navigation/timeout/window errors, retrying gives the same result.
+      if (result.reason !== "slot_unavailable" && result.reason !== "duration_too_long") {
+        break;
+      }
     }
+    return { success: false, lastResult, lastRoom };
+  };
 
+  /** Finalize a successful Skedda booking — DB write, calendar update, notify. */
+  const finalizeSuccess = async (
+    room: RoomName,
+    result: BookSkeddaResult & { success: true },
+  ) => {
     await audit({
-      action: "skedda_failure",
+      action: "skedda_success",
       userId: args.userId,
       iCalUID: args.iCalUID,
-      details: { room: room.name, reason: result.reason, errorMessage: result.errorMessage },
+      details: { room, skeddaBookingId: result.skeddaBookingId },
     });
-
-    // Only retry the next room when this one is room-specific:
-    //  - slot_unavailable   : someone else has it for this slot
-    //  - duration_too_long  : Antler caps some rooms to 1h30 (Mars), so a
-    //                          longer meeting needs to try a different room
-    // For form/navigation/timeout/window errors, retrying gives the same result.
-    if (result.reason !== "slot_unavailable" && result.reason !== "duration_too_long") {
-      break;
+    await markBookingResult({
+      iCalUID: args.iCalUID,
+      status: "booked",
+      room,
+      skeddaBookingRef: result.skeddaBookingId,
+      skeddaCancelToken: result.cancelToken,
+      skeddaCookies: result.cookies,
+    });
+    await applyRoomToCalendarEvent({
+      user,
+      eventId: args.googleEventId,
+      room,
+    }).catch((err) => {
+      audit({
+        action: "error",
+        userId: args.userId,
+        iCalUID: args.iCalUID,
+        details: { where: "applyRoomToCalendarEvent", message: String(err) },
+      });
+    });
+    const persisted = await findBookingByICalUID(args.iCalUID);
+    if (persisted) {
+      await notifySuccess(user, args, room, persisted._id);
     }
+  };
+
+  // 1st pass: try with the user's preferred slot (buffered if bufferMin > 0,
+  // exact otherwise).
+  let attempt = await tryAllRoomsForSlot(skeddaStartsAt, skeddaEndsAt);
+
+  // 2nd pass — buffer fallback. If the buffered slot failed everywhere with
+  // a reason that *could* be buffer-induced (someone holds the wider window,
+  // buffer pushed start before opening, buffer pushed duration past a room's
+  // cap), retry the whole priority list with the exact Calendar times. The
+  // user explicitly opted for graceful degradation: prefer "booked without
+  // buffer" over "not booked at all".
+  const bufferFallbackReasons = new Set(["slot_unavailable", "duration_too_long", "outside_hours"]);
+  if (
+    !attempt.success &&
+    bufferMin > 0 &&
+    attempt.lastResult &&
+    !attempt.lastResult.success &&
+    bufferFallbackReasons.has(attempt.lastResult.reason)
+  ) {
+    await audit({
+      action: "buffer_fallback",
+      userId: args.userId,
+      iCalUID: args.iCalUID,
+      details: {
+        reason: attempt.lastResult.reason,
+        lastRoomTried: attempt.lastRoom,
+        bufferMinutes: bufferMin,
+        retryWithExactTimes: true,
+      },
+    });
+    attempt = await tryAllRoomsForSlot(args.meeting.startsAt, args.meeting.endsAt);
   }
 
-  // All attempts failed
+  if (attempt.success) {
+    await finalizeSuccess(attempt.room, attempt.result);
+    await audit({
+      action: "booking_engine_finished",
+      userId: args.userId,
+      iCalUID: args.iCalUID,
+      details: { result: "booked", room: attempt.room },
+    });
+    return;
+  }
+
+  // All attempts failed (both buffered and, if applicable, exact-time fallback)
+  const lastResult = attempt.lastResult;
+  const lastRoom = attempt.lastRoom;
   const failure = lastResult && !lastResult.success ? lastResult : null;
   await markBookingResult({
     iCalUID: args.iCalUID,

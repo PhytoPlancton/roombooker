@@ -674,6 +674,7 @@ function RulesSection({
           <div className="toggle-row-desc">
             Pratique pour préparer la démo, gérer un débord, ou rejoindre la salle suivante sans courir.
             Le meeting Google reste à l'heure exacte — seule la salle Skedda est réservée plus large.
+            Si la marge n'est pas dispo, on retombe automatiquement sur le créneau pile-poil plutôt que d'échouer la résa.
           </div>
         </div>
       </div>
