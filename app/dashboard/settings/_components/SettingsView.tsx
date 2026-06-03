@@ -101,14 +101,9 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
     return () => clearTimeout(id);
   }, [toast]);
 
-  // Navigation guard. When the rules form is dirty:
-  //  - beforeunload → native browser prompt covers tab close / refresh /
-  //    typing a new URL / back through the URL bar.
-  //  - click capture on the document → intercepts any <a href> click
-  //    (Next.js Links, brand logo, avatar, sidebar links, etc.) so we can
-  //    open the confirm modal before letting the navigation happen.
-  //  - submit capture → covers the logout form action="/api/auth/logout".
-  // Listeners live behind refs so we don't re-bind on every keystroke.
+  // Latest-value refs so the navigation guard's listener (registered once
+  // when rulesDirty flips on) always reads the current draft/saved/dirty
+  // state without re-binding on every keystroke.
   const draftRef = useRef(draftRules);
   const savedRef = useRef(savedRules);
   const dirtyRef = useRef(rulesDirty);
@@ -116,36 +111,51 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
   savedRef.current = savedRules;
   dirtyRef.current = rulesDirty;
 
+  // Open the exit-confirmation modal. `proceed` runs after the user
+  // resolves the prompt (either by discarding the draft or by saving it
+  // successfully). Reads state via refs so it's safe to call from a
+  // long-lived document listener as well as from a fresh button onClick.
+  const askExitConfirmation = (proceed: () => void) => {
+    setPendingExit({
+      discard: () => {
+        setDraftRules(savedRef.current);
+        setPendingExit(null);
+        proceed();
+      },
+      saveThen: () => {
+        startRulesSaveTransition(async () => {
+          const r = await saveRulesAction(draftRef.current);
+          if (r.ok) {
+            setSavedRules(draftRef.current);
+            setPendingExit(null);
+            setToast("Règles enregistrées");
+            proceed();
+          } else {
+            setToast("Erreur lors de l'enregistrement");
+          }
+        });
+      },
+    });
+  };
+  // Expose the latest closure of askExitConfirmation via a ref so the
+  // document-level listener (registered once per dirty cycle) keeps
+  // calling the up-to-date function.
+  const askRef = useRef(askExitConfirmation);
+  askRef.current = askExitConfirmation;
+
+  // Navigation guard. When the rules form is dirty:
+  //  - beforeunload → native browser prompt covers tab close / refresh /
+  //    typing a new URL / back through the URL bar.
+  //  - click capture on the document → intercepts any <a href> click
+  //    (Next.js Links, brand logo, avatar, sidebar links, etc.) so we can
+  //    open the confirm modal before letting the navigation happen.
+  //  - submit capture → covers the logout form action="/api/auth/logout".
   useEffect(() => {
     if (!rulesDirty) return;
 
     const beforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
-    };
-
-    const askThen = (after: () => void) => {
-      setPendingExit({
-        discard: () => {
-          setDraftRules(savedRef.current);
-          setPendingExit(null);
-          after();
-        },
-        saveThen: () => {
-          // Inline save so we keep `after` in closure rather than juggling refs.
-          startRulesSaveTransition(async () => {
-            const r = await saveRulesAction(draftRef.current);
-            if (r.ok) {
-              setSavedRules(draftRef.current);
-              setPendingExit(null);
-              setToast("Règles enregistrées");
-              after();
-            } else {
-              setToast("Erreur lors de l'enregistrement");
-            }
-          });
-        },
-      });
     };
 
     const onClick = (e: MouseEvent) => {
@@ -163,7 +173,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
 
       e.preventDefault();
       e.stopPropagation();
-      askThen(() => router.push(href));
+      askRef.current(() => router.push(href));
     };
 
     const onSubmit = (e: SubmitEvent) => {
@@ -175,7 +185,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
       if (action !== "/api/auth/logout") return;
       e.preventDefault();
       e.stopPropagation();
-      askThen(() => form.submit());
+      askRef.current(() => form.submit());
     };
 
     window.addEventListener("beforeunload", beforeUnload);
@@ -187,6 +197,19 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
       document.removeEventListener("submit", onSubmit, true);
     };
   }, [rulesDirty, router]);
+
+  // Switch sub-section. If the user is on Règles and has unsaved edits,
+  // prompt before leaving — the agent-recommended "no block" behavior
+  // turned out to be wrong for our team (they expected the guard to
+  // fire on Notifs/Account too).
+  const handleSectionChange = (nextId: string) => {
+    if (nextId === active) return;
+    if (rulesDirty && active === "rules") {
+      askExitConfirmation(() => setActive(nextId));
+      return;
+    }
+    setActive(nextId);
+  };
 
   return (
     <main className="page">
@@ -211,7 +234,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
               key={s.id}
               className="settings-nav-item"
               data-active={active === s.id}
-              onClick={() => setActive(s.id)}
+              onClick={() => handleSectionChange(s.id)}
               type="button"
             >
               {s.label}

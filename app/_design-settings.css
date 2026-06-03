@@ -196,28 +196,46 @@
   border-radius: var(--radius);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lg, 0 12px 40px rgba(0,0,0,0.2));
-  max-width: 440px;
+  max-width: 560px;
   width: 100%;
-  padding: 20px;
+  padding: 24px;
   animation: modal-slide-up 150ms ease-out;
 }
 .modal-title {
   margin: 0 0 8px;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 .modal-body {
-  margin: 0 0 20px;
+  margin: 0 0 24px;
   font-size: 14px;
   color: var(--ink-2);
   line-height: 1.5;
 }
+/* 3 buttons on one row when wide, stacked column when narrow. Stacked
+ * order on narrow: primary first (top), then destructive, then cancel
+ * — so the most likely intent is closest to the thumb on mobile. */
 .modal-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+.modal-actions .btn {
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+@media (max-width: 520px) {
+  .modal-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .modal-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 .btn-ghost-danger {
   border-color: transparent;
