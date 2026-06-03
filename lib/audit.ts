@@ -20,6 +20,7 @@ export type AuditAction =
   | "notify_sent"
   | "watch_activated"
   | "watch_deactivated"
+  | "user_deleted"
   | "error";
 
 export interface AuditDoc {

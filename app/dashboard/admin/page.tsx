@@ -19,5 +19,5 @@ export default async function AdminPage() {
     getAdminStats(),
     getChannelAvailability(),
   ]);
-  return <AdminView stats={stats} availability={availability} />;
+  return <AdminView stats={stats} availability={availability} currentUserId={user._id.toString()} />;
 }

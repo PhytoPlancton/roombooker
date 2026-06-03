@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
 import type { AdminStats, ActivityItem } from "@/lib/admin-stats";
 import type { ChannelAvailability } from "@/lib/service-state";
-import { setChannelAvailabilityAction } from "../../actions";
+import { deleteUserAction, setChannelAvailabilityAction } from "../../actions";
 
 function formatHM(minutes: number): { value: string; unit: string } {
   if (minutes <= 0) return { value: "0", unit: "min" };
@@ -41,14 +41,23 @@ function ActivityIcon({ kind }: { kind: ActivityItem["kind"] }) {
 export function AdminView({
   stats,
   availability,
+  currentUserId,
 }: {
   stats: AdminStats;
   availability: ChannelAvailability;
+  currentUserId: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [refreshedAt, setRefreshedAt] = useState<Date>(new Date());
   const [now, setNow] = useState<Date>(new Date());
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   useEffect(() => {
     setRefreshedAt(new Date());
@@ -207,11 +216,13 @@ export function AdminView({
                   <th>Temps</th>
                   <th>Dernière</th>
                   <th>Sync</th>
+                  <th style={{ width: 36 }} aria-label="Supprimer" />
                 </tr>
               </thead>
               <tbody>
                 {stats.users.map((u) => {
                   const t = formatHM(u.minutesSaved);
+                  const isSelf = u.userId === currentUserId;
                   return (
                     <tr key={u.userId}>
                       <td>
@@ -229,6 +240,16 @@ export function AdminView({
                           {u.watchActive ? "Actif" : "Inactif"}
                         </span>
                       </td>
+                      <td>
+                        {!isSelf && (
+                          <DeleteUserButton
+                            userId={u.userId}
+                            name={u.name}
+                            email={u.email}
+                            onResult={(msg) => setToast(msg)}
+                          />
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -237,7 +258,100 @@ export function AdminView({
           )}
         </section>
       </div>
+
+      <div className="toast-wrap" data-open={!!toast}>
+        <div className="toast">
+          <span className="toast-icon">
+            <Icon.check size={11} />
+          </span>
+          {toast}
+        </div>
+      </div>
     </main>
+  );
+}
+
+/**
+ * Destructive admin action: wipes a team member's account. Uses a
+ * two-click confirmation pattern — first click swaps the icon to a
+ * "confirm" red pill that auto-reverts after 4s if not clicked again.
+ * Avoids accidental clicks while not requiring a full modal.
+ */
+function DeleteUserButton({
+  userId,
+  name,
+  email,
+  onResult,
+}: {
+  userId: string;
+  name: string;
+  email: string;
+  onResult: (msg: string) => void;
+}) {
+  const router = useRouter();
+  const [armed, setArmed] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!armed) return;
+    const id = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(id);
+  }, [armed]);
+
+  const handleClick = () => {
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("userId", userId);
+    startTransition(async () => {
+      const r = await deleteUserAction(fd);
+      setArmed(false);
+      if (r.ok) {
+        const extra = r.bookingsCancelled && r.bookingsCancelled > 0
+          ? ` — ${r.bookingsCancelled} résa(s) annulée(s) sur Skedda`
+          : "";
+        onResult(`${name} supprimé${extra}`);
+        router.refresh();
+      } else {
+        onResult(`Erreur suppression ${name} : ${r.error || "inconnue"}`);
+      }
+    });
+  };
+
+  if (pending) {
+    return (
+      <button className="admin-delete-btn pending" type="button" disabled aria-label={`Suppression de ${name}...`}>
+        …
+      </button>
+    );
+  }
+
+  if (armed) {
+    return (
+      <button
+        className="admin-delete-btn armed"
+        type="button"
+        onClick={handleClick}
+        title={`Cliquer à nouveau pour confirmer la suppression définitive de ${name} (${email})`}
+        aria-label={`Confirmer la suppression de ${name}`}
+      >
+        Confirmer ?
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className="admin-delete-btn"
+      type="button"
+      onClick={handleClick}
+      title={`Supprimer ${name} (${email})`}
+      aria-label={`Supprimer ${name}`}
+    >
+      <Icon.x size={14} />
+    </button>
   );
 }
 

@@ -130,3 +130,20 @@ export async function listBookingsForUser(userId: ObjectId, limit = 50): Promise
     .limit(limit)
     .toArray();
 }
+
+/**
+ * Bookings still active on Skedda (status=booked) that haven't started yet.
+ * Used when deleting a user account: we cancel their future reservations
+ * best-effort so we don't leave zombie slots blocked on Skedda after the
+ * user doc is gone.
+ */
+export async function listFutureBookedBookings(userId: ObjectId): Promise<BookingDoc[]> {
+  const col = await bookingsCol();
+  return col
+    .find({
+      userId,
+      status: "booked",
+      "meeting.startsAt": { $gt: new Date() },
+    })
+    .toArray();
+}

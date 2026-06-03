@@ -6,10 +6,10 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/session";
 import { activateWatchForUser, deactivateWatchForUser } from "@/lib/watch";
 import { releaseBookingByIdAsUser } from "@/lib/release-booking";
+import { listFutureBookedBookings, findBookingById } from "@/lib/bookings";
 import { setChannelAvailability, getChannelAvailability, type ChannelAvailability } from "@/lib/service-state";
-import { findUserById } from "@/lib/users";
+import { findUserById, deleteUserDoc } from "@/lib/users";
 import { sendSms, sendEmail, sendWhatsapp } from "@/lib/notify";
-import { findBookingById } from "@/lib/bookings";
 import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
 import {
@@ -256,6 +256,103 @@ export async function setChannelAvailabilityAction(formData: FormData): Promise<
   revalidatePath("/dashboard/admin");
   revalidatePath("/dashboard/settings");
   return { ok: true };
+}
+
+/**
+ * Hard-delete a team member's account from the admin pilotage page.
+ * Steps, in order:
+ *  1. Stop their Google Calendar watch (releases the Google resource)
+ *  2. Best-effort cancel their future-booked Skedda reservations (don't
+ *     want zombie slots blocked after the user doc is gone)
+ *  3. Delete the user document itself
+ *
+ * Bookings + audit entries with their old userId are intentionally kept —
+ * lets us still see the historical activity in stats and audit logs. If
+ * the user signs in again, they get a brand-new doc (different ObjectId,
+ * fresh phone, fresh prefs, fresh onboarding).
+ *
+ * Admin-only and refuses to self-destruct (defense in depth in case the
+ * UI tries to render a delete button on the admin's own row).
+ */
+export async function deleteUserAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string; bookingsCancelled?: number }> {
+  const { userId: adminId } = await requireUser();
+  const admin = await findUserById(adminId);
+  if (!admin || admin.email !== ADMIN_EMAIL) return { ok: false, error: "forbidden" };
+
+  const raw = formData.get("userId");
+  if (typeof raw !== "string") return { ok: false, error: "missing_userId" };
+  let targetId: ObjectId;
+  try {
+    targetId = new ObjectId(raw);
+  } catch {
+    return { ok: false, error: "invalid_userId" };
+  }
+  if (targetId.equals(adminId)) {
+    return { ok: false, error: "cant_delete_self" };
+  }
+
+  const target = await findUserById(targetId);
+  if (!target) return { ok: false, error: "user_not_found" };
+
+  // 1) Stop the watch if any. Don't block deletion on failure — the watch
+  //    might already be expired, channel id stale, etc.
+  if (target.watchChannelId) {
+    try {
+      await deactivateWatchForUser(targetId);
+    } catch (err) {
+      await audit({
+        action: "error",
+        userId: adminId,
+        details: {
+          where: "deleteUserAction:stopWatch",
+          target: target.email,
+          message: err instanceof Error ? err.message : String(err),
+        },
+      });
+    }
+  }
+
+  // 2) Cancel each future booking best-effort. We use releaseBookingByIdAsUser
+  //    with the target's own userId so the per-user auth checks still pass.
+  let bookingsCancelled = 0;
+  const future = await listFutureBookedBookings(targetId);
+  for (const b of future) {
+    try {
+      const r = await releaseBookingByIdAsUser(b._id, targetId);
+      if (r.ok) bookingsCancelled++;
+    } catch (err) {
+      await audit({
+        action: "error",
+        userId: adminId,
+        details: {
+          where: "deleteUserAction:releaseBooking",
+          target: target.email,
+          bookingId: b._id.toString(),
+          message: err instanceof Error ? err.message : String(err),
+        },
+      });
+    }
+  }
+
+  // 3) Wipe the user doc itself. Index on { email: unique } means a fresh
+  //    OAuth signin with the same email will upsert a clean new doc.
+  await deleteUserDoc(targetId);
+
+  await audit({
+    action: "user_deleted",
+    userId: adminId,
+    details: {
+      target: target.email,
+      targetUserId: targetId.toString(),
+      bookingsCancelled,
+      hadWatch: !!target.watchChannelId,
+    },
+  });
+
+  revalidatePath("/dashboard/admin");
+  return { ok: true, bookingsCancelled };
 }
 
 /**

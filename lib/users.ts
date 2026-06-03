@@ -300,6 +300,18 @@ export async function findUserByWatchChannelId(channelId: string): Promise<UserD
   return col.findOne({ watchChannelId: channelId });
 }
 
+/**
+ * Hard-delete a user document. Used by the admin "remove from team" action —
+ * after this returns, a fresh OAuth signin with the same email will create
+ * a brand-new doc (different ObjectId, no carry-over of phone, prefs, watch,
+ * etc.). Bookings + audit entries keep the OLD ObjectId reference and
+ * become orphans (intentionally — we want a clean break).
+ */
+export async function deleteUserDoc(userId: ObjectId): Promise<void> {
+  const col = await usersCol();
+  await col.deleteOne({ _id: userId });
+}
+
 export async function findUsersWithExpiringWatch(within: Date): Promise<UserDoc[]> {
   const col = await usersCol();
   return col
