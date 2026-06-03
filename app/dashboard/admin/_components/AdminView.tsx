@@ -163,6 +163,46 @@ export function AdminView({
         </div>
       </div>
 
+      <section className="admin-card">
+        <div className="admin-card-head">
+          <h2 className="settings-h-sub" style={{ margin: 0 }}>
+            Utilisation Skedda
+          </h2>
+          <span className="kpi-meta">
+            Skedda n'expose pas nos crédits restants — on suit nos volumes et les refus pour repérer un quota qui se rapproche.
+          </span>
+        </div>
+        <div className="kpi-row" style={{ marginBottom: 0 }}>
+          <div className="kpi">
+            <div className="kpi-label">Bookings · 24h</div>
+            <div className="kpi-value">{stats.bookingsLast24h}</div>
+            <div className="kpi-meta">succès sur Skedda</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-label">Bookings · 7j</div>
+            <div className="kpi-value">{stats.bookingsLast7d}</div>
+            <div className="kpi-meta">succès sur Skedda</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-label">Bookings · 30j</div>
+            <div className="kpi-value">{stats.bookingsLast30d}</div>
+            <div className="kpi-meta">succès sur Skedda</div>
+          </div>
+          <div
+            className="kpi kpi-errors"
+            data-state={stats.quotaExceededLast7d > 0 ? "alert" : "ok"}
+          >
+            <div className="kpi-label">Quotas refusés · 7j</div>
+            <div className="kpi-value">{stats.quotaExceededLast7d}</div>
+            <div className="kpi-meta">
+              {stats.quotaExceededLast7d > 0
+                ? "Skedda a refusé pour quota"
+                : "aucun refus crédit récent"}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="admin-card admin-channels">
         <div className="admin-card-head">
           <h2 className="settings-h-sub" style={{ margin: 0 }}>

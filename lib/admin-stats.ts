@@ -33,6 +33,13 @@ export interface AdminStats {
   // Last 7 days slice
   bookingsLast7d: number;
   errorsLast7d: number;
+  // Skedda usage — proxy for hitting venue quotas. We can't query Skedda
+  // for "credits remaining" (we use guest bookings, no account context),
+  // so we count what WE've done and watch for quota_exceeded errors as
+  // the canary. See `quotaExceededLast7d` for the explicit refusal count.
+  bookingsLast24h: number;
+  bookingsLast30d: number;
+  quotaExceededLast7d: number;
   // Per-user
   users: UserStat[];
   // Recent activity
@@ -49,6 +56,8 @@ export async function getAdminStats(): Promise<AdminStats> {
   const auditCol = db.collection("auditLog");
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000);
+  const twentyFourHoursAgo = new Date(Date.now() - 86400_000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000);
 
   const [
     bookingsBooked,
@@ -56,8 +65,11 @@ export async function getAdminStats(): Promise<AdminStats> {
     smsSent,
     emailsSent,
     auditErrors,
+    bookingsLast24h,
     bookingsLast7d,
+    bookingsLast30d,
     errorsLast7d,
+    quotaExceededLast7d,
     activeConnections,
     totalUsers,
     perUserBookings,
@@ -69,8 +81,22 @@ export async function getAdminStats(): Promise<AdminStats> {
     auditCol.countDocuments({ action: "notify_sent", "details.channel": "sms", "details.success": true }),
     auditCol.countDocuments({ action: "notify_sent", "details.channel": "email", "details.success": true }),
     auditCol.countDocuments({ action: "error" }),
-    bookingsCol.countDocuments({ status: "booked", createdAt: { $gte: sevenDaysAgo } }),
+    // Skedda-usage proxies. We count successful bookings by `updatedAt`
+    // (= moment Skedda confirmed) rather than `createdAt` (= moment we
+    // received the meeting from the webhook, often days earlier).
+    bookingsCol.countDocuments({ status: "booked", updatedAt: { $gte: twentyFourHoursAgo } }),
+    bookingsCol.countDocuments({ status: "booked", updatedAt: { $gte: sevenDaysAgo } }),
+    bookingsCol.countDocuments({ status: "booked", updatedAt: { $gte: thirtyDaysAgo } }),
     bookingsCol.countDocuments({ status: "failed", createdAt: { $gte: sevenDaysAgo } }),
+    // Canary for "we're hitting Skedda's quota". The classifier sets
+    // reason="quota_exceeded" when Skedda returns a credit/quota/limit
+    // refusal. If this spikes, we know to slow down or switch to a
+    // different name variant / IP / etc.
+    auditCol.countDocuments({
+      action: "skedda_failure",
+      "details.reason": "quota_exceeded",
+      ts: { $gte: sevenDaysAgo },
+    }),
     usersCol.countDocuments({ watchExpiry: { $gt: new Date() } }),
     usersCol.countDocuments({}),
     bookingsCol.aggregate([
@@ -207,6 +233,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     errors: bookingsFailed + auditErrors,
     bookingsLast7d,
     errorsLast7d,
+    bookingsLast24h,
+    bookingsLast30d,
+    quotaExceededLast7d,
     users,
     lastActivity,
     recentActivity,
