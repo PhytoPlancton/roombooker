@@ -23,7 +23,7 @@ function getWebhookConfig() {
 
 export async function activateWatchForUser(
   userId: ObjectId,
-  options: { source?: "manual" | "calendar_resync" | "cron_renewal" } = {},
+  options: { source?: "manual" | "calendar_resync" | "cron_renewal" | "oauth_signin" } = {},
 ): Promise<void> {
   const source = options.source ?? "manual";
 
@@ -59,9 +59,11 @@ export async function activateWatchForUser(
     details: { source, expiry: watch.expiry.toISOString(), wasActive },
   });
 
-  // Only notify the sales when the re-init was NOT triggered by them
-  // (manual click on dashboard = they already know).
-  if (source !== "manual" && wasActive) {
+  // Only notify the sales when the re-init was NOT triggered by them.
+  //  - "manual"       → they clicked the button on the dashboard, they know
+  //  - "oauth_signin" → they just signed in, they're actively looking at us
+  // The notify is intended for SILENT renewals (cron, calendar_resync).
+  if (source !== "manual" && source !== "oauth_signin" && wasActive) {
     const reason =
       source === "cron_renewal"
         ? "Surveillance Calendar renouvelée auto"

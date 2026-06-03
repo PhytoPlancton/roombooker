@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { exchangeCodeForTokens, fetchUserInfo, hasRequiredScope } from "@/lib/google";
 import { getSession } from "@/lib/session";
 import { upsertUserOnLogin } from "@/lib/users";
+import { activateWatchForUser } from "@/lib/watch";
 import { audit } from "@/lib/audit";
 
 function publicBase(req: NextRequest): string {
@@ -68,6 +69,35 @@ export async function GET(req: NextRequest) {
     session.userId = user._id.toString();
     session.email = user.email;
     await session.save();
+
+    // Auto-activate the Google Calendar watch right after signin. The
+    // historical UX where the user had to manually click "Activer la
+    // surveillance" on the dashboard was a footgun — every new signup
+    // landed on a dead dashboard and many never realised they had to
+    // press a button. Now the watch is up by the time they arrive.
+    //
+    // Idempotent: if a watch already exists (returning user re-OAuthing
+    // because tokens were reset or refreshed), activateWatchForUser
+    // stops the old channel before creating a new one. Failures here
+    // do NOT block the login — the user lands on the dashboard either
+    // way and can retry from the UI if needed.
+    const watchExpiry = user.watchExpiry ? new Date(user.watchExpiry) : null;
+    const watchActive = !!user.watchChannelId && !!watchExpiry && watchExpiry.getTime() > Date.now();
+    if (!watchActive) {
+      try {
+        await activateWatchForUser(user._id, { source: "oauth_signin" });
+      } catch (err) {
+        await audit({
+          action: "error",
+          userId: user._id,
+          details: {
+            where: "oauth_callback:auto_activate_watch",
+            message: err instanceof Error ? err.message : String(err),
+          },
+        });
+        // fall through — user can still hit "Activer" manually from dashboard
+      }
+    }
 
     const dest = user.telephone ? "/dashboard" : "/onboarding";
     return NextResponse.redirect(`${base}${dest}`);
