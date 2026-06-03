@@ -149,9 +149,20 @@ export async function notifyUser(args: {
   // Admin can globally pause a channel (provider outage, maintenance). Read
   // the singleton once and gate each send below.
   const availability = await getChannelAvailability();
+  const wantedWa = !!(prefs as { whatsapp?: boolean }).whatsapp;
+  const wantedSms = prefs.sms;
 
-  if (prefs.sms && user.telephone && availability.sms) {
+  // 1) Attempt the phone channels the user actually asked for. Track each
+  //    so we can decide whether to engage the fallback below.
+  let smsAttempted = false;
+  let smsOk = false;
+  let waAttempted = false;
+  let waOk = false;
+
+  if (wantedSms && user.telephone && availability.sms) {
+    smsAttempted = true;
     const r = await sendSms({ phoneNumber: user.telephone, text: smsText });
+    smsOk = r.success;
     await audit({
       action: r.success ? "notify_sent" : "error",
       userId: user._id ?? null,
@@ -159,10 +170,10 @@ export async function notifyUser(args: {
       details: { channel: "sms", type, to: user.telephone, success: r.success, error: r.error },
     });
   }
-  // `whatsapp` is optional on ChannelPrefs for backward-compat with users
-  // whose stored prefs predate the WhatsApp channel (added in v0.10.29).
-  if ((prefs as { whatsapp?: boolean }).whatsapp && user.telephone && availability.whatsapp) {
+  if (wantedWa && user.telephone && availability.whatsapp) {
+    waAttempted = true;
     const r = await sendWhatsapp({ phoneNumber: user.telephone, text: smsText });
+    waOk = r.success;
     await audit({
       action: r.success ? "notify_sent" : "error",
       userId: user._id ?? null,
@@ -170,6 +181,59 @@ export async function notifyUser(args: {
       details: { channel: "whatsapp", type, to: user.telephone, success: r.success, error: r.error },
     });
   }
+
+  // 2) Phone-channel fallback. If the user asked for SMS *or* WhatsApp but
+  //    none landed (gateway 500, channel globally paused, etc.) — try the
+  //    sibling channel as a safety net. We don't override an explicit OFF:
+  //    fallback only kicks in if the user wanted SOMETHING on their phone
+  //    and got nothing.
+  //
+  //    Concrete cases this covers:
+  //     - WhatsApp gateway down (EDJ Labs 500) → SMS goes through
+  //     - SMS gateway down → WhatsApp delivers
+  //     - Admin pauses WhatsApp globally → SMS still fires
+  //     - User had only WhatsApp ticked but their number isn't a WA user → SMS
+  const wantedSomePhone = wantedSms || wantedWa;
+  const gotPhone = smsOk || waOk;
+  if (user.telephone && wantedSomePhone && !gotPhone) {
+    // Prefer SMS as the fallback when WhatsApp was the only attempt — SMS is
+    // the universal carrier and basically always delivers. Mirror the other
+    // direction for completeness.
+    if (!smsAttempted && availability.sms) {
+      const r = await sendSms({ phoneNumber: user.telephone, text: smsText });
+      await audit({
+        action: r.success ? "notify_sent" : "error",
+        userId: user._id ?? null,
+        iCalUID: iCalUID ?? null,
+        details: {
+          channel: "sms",
+          type,
+          to: user.telephone,
+          success: r.success,
+          error: r.error,
+          fallback: waAttempted ? "whatsapp_failed" : "whatsapp_unavailable",
+        },
+      });
+    } else if (!waAttempted && availability.whatsapp) {
+      const r = await sendWhatsapp({ phoneNumber: user.telephone, text: smsText });
+      await audit({
+        action: r.success ? "notify_sent" : "error",
+        userId: user._id ?? null,
+        iCalUID: iCalUID ?? null,
+        details: {
+          channel: "whatsapp",
+          type,
+          to: user.telephone,
+          success: r.success,
+          error: r.error,
+          fallback: smsAttempted ? "sms_failed" : "sms_unavailable",
+        },
+      });
+    }
+  }
+
+  // 3) Email is independent of the phone channels (different medium, different
+  //    user habits). Always honour the explicit pref.
   if (prefs.email && availability.email) {
     const r = await sendEmail({
       to: { email: user.email, name: user.firstName },
