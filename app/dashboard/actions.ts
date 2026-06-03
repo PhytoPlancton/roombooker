@@ -187,37 +187,21 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   redirect(`/dashboard?error=${reason}`);
 }
 
-function parseListField(raw: FormDataEntryValue | null, lowercase = false): string[] {
-  if (typeof raw !== "string") return [];
-  return raw
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .map((s) => (lowercase ? s.toLowerCase() : s));
-}
-
-export async function saveRulesAction(formData: FormData): Promise<void> {
+/**
+ * Persist the booking rules. Takes the typed object directly (no FormData
+ * parsing) so the client can hold the draft in React state and submit
+ * exactly what it owns — keeps the unsaved-changes bar and the diffing
+ * logic dead simple.
+ *
+ * The caller normalizes the keyword/email lists (trim, lowercase emails)
+ * before sending; we don't re-normalize server-side to keep the round-trip
+ * symmetric.
+ */
+export async function saveRulesAction(rules: BookingRules): Promise<{ ok: boolean }> {
   const { userId } = await requireUser();
-  const rules: BookingRules = {
-    externalAttendee: {
-      enabled: formData.get("externalAttendee_enabled") === "on",
-    },
-    titleKeywords: {
-      enabled: formData.get("titleKeywords_enabled") === "on",
-      keywords: parseListField(formData.get("titleKeywords_list")),
-    },
-    invitedEmails: {
-      enabled: formData.get("invitedEmails_enabled") === "on",
-      emails: parseListField(formData.get("invitedEmails_list"), true),
-    },
-    descriptionKeywords: {
-      enabled: formData.get("descriptionKeywords_enabled") === "on",
-      keywords: parseListField(formData.get("descriptionKeywords_list")),
-    },
-  };
   await setBookingRules(userId, rules);
   revalidatePath("/dashboard/settings");
-  redirect("/dashboard/settings?section=rules&success=rules_saved");
+  return { ok: true };
 }
 
 export async function deactivateWatchAction(): Promise<void> {

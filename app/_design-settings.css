@@ -141,6 +141,101 @@
   font-weight: 600;
 }
 
+/* Small amber dot next to a sidebar tab to signal that the user has
+ * unsaved edits in that section — works even when they navigated away. */
+.settings-nav-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: var(--warning, #C99A2E);
+  vertical-align: middle;
+}
+
+/* Sticky "Modifications non enregistrées" bar that appears at the bottom
+ * of the section when there are unsaved rule edits. Vercel/Linear pattern. */
+.unsaved-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  bottom: 16px;
+  margin: 24px 0 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--warning-soft, #FBF1DA);
+  border: 1px solid var(--warning, #C99A2E);
+  box-shadow: var(--shadow-sm);
+  font-size: 13px;
+  z-index: 5;
+}
+.unsaved-bar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.unsaved-bar-spacer { flex: 1; }
+.unsaved-bar .btn { padding: 6px 12px; }
+
+/* Modal backdrop + card for the "Quitter sans enregistrer ?" prompt. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+  animation: modal-fade-in 120ms ease-out;
+}
+.modal-card {
+  background: var(--bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg, 0 12px 40px rgba(0,0,0,0.2));
+  max-width: 440px;
+  width: 100%;
+  padding: 20px;
+  animation: modal-slide-up 150ms ease-out;
+}
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.modal-body {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-ghost-danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--danger);
+}
+.btn-ghost-danger:hover {
+  background: var(--danger-soft);
+}
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .settings-content {
   background: var(--bg-elev);
   border: 1px solid var(--line);

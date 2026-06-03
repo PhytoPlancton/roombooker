@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, useTransition, useRef, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { initials } from "@/lib/ui/format";
 import type { BookingRules, NotifPrefs } from "@/lib/users";
@@ -40,11 +40,53 @@ const SECTIONS = [
   { id: "account", label: "Mon compte" },
 ];
 
+/** Pending navigation to ask the user about before discarding their edits. */
+interface PendingExit {
+  /** Action to run if the user picks "Quitter sans enregistrer". */
+  discard: () => void;
+  /** Action to run if the user picks "Enregistrer et quitter" (after a successful save). */
+  saveThen: () => void;
+}
+
 export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, bufferMinutes, notifPrefs, channelAvailability, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
+  const router = useRouter();
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
   const searchParams = useSearchParams();
   const sectionFromUrl = searchParams.get("section");
+
+  // Booking-rules state lives at this level so it survives switching to
+  // another sub-section (Notifications, Mon compte) and back. The sticky
+  // "unsaved changes" bar only renders when the active section is Règles,
+  // but the dirty flag stays armed across navigation so we can intercept
+  // logout / top-nav clicks elsewhere in the page.
+  const [draftRules, setDraftRules] = useState<BookingRules>(rules);
+  const [savedRules, setSavedRules] = useState<BookingRules>(rules);
+  const rulesDirty = useMemo(
+    () => JSON.stringify(draftRules) !== JSON.stringify(savedRules),
+    [draftRules, savedRules],
+  );
+  const [rulesSaving, startRulesSaveTransition] = useTransition();
+  const [pendingExit, setPendingExit] = useState<PendingExit | null>(null);
+
+  /** Submit the current draft to the server, update the saved snapshot on success. */
+  const saveRules = (after?: () => void) => {
+    startRulesSaveTransition(async () => {
+      const r = await saveRulesAction(draftRules);
+      if (r.ok) {
+        setSavedRules(draftRules);
+        setToast("Règles enregistrées");
+        after?.();
+      } else {
+        setToast("Erreur lors de l'enregistrement");
+      }
+    });
+  };
+
+  /** Roll the draft back to the last saved snapshot. */
+  const discardRules = () => {
+    setDraftRules(savedRules);
+  };
 
   useEffect(() => {
     if (sectionFromUrl && sectionFromUrl !== active) {
@@ -58,6 +100,93 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
     const id = setTimeout(() => setToast(null), 2400);
     return () => clearTimeout(id);
   }, [toast]);
+
+  // Navigation guard. When the rules form is dirty:
+  //  - beforeunload → native browser prompt covers tab close / refresh /
+  //    typing a new URL / back through the URL bar.
+  //  - click capture on the document → intercepts any <a href> click
+  //    (Next.js Links, brand logo, avatar, sidebar links, etc.) so we can
+  //    open the confirm modal before letting the navigation happen.
+  //  - submit capture → covers the logout form action="/api/auth/logout".
+  // Listeners live behind refs so we don't re-bind on every keystroke.
+  const draftRef = useRef(draftRules);
+  const savedRef = useRef(savedRules);
+  const dirtyRef = useRef(rulesDirty);
+  draftRef.current = draftRules;
+  savedRef.current = savedRules;
+  dirtyRef.current = rulesDirty;
+
+  useEffect(() => {
+    if (!rulesDirty) return;
+
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+
+    const askThen = (after: () => void) => {
+      setPendingExit({
+        discard: () => {
+          setDraftRules(savedRef.current);
+          setPendingExit(null);
+          after();
+        },
+        saveThen: () => {
+          // Inline save so we keep `after` in closure rather than juggling refs.
+          startRulesSaveTransition(async () => {
+            const r = await saveRulesAction(draftRef.current);
+            if (r.ok) {
+              setSavedRules(draftRef.current);
+              setPendingExit(null);
+              setToast("Règles enregistrées");
+              after();
+            } else {
+              setToast("Erreur lors de l'enregistrement");
+            }
+          });
+        },
+      });
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (!dirtyRef.current) return;
+      const a = (e.target as HTMLElement | null)?.closest?.("a");
+      if (!a) return;
+      const href = a.getAttribute("href");
+      if (!href) return;
+      // Skip anchors, externals, mailto, new-tab — they're not internal nav.
+      if (href.startsWith("#") || href.startsWith("http") || href.startsWith("mailto:")) return;
+      if (a.getAttribute("target") === "_blank") return;
+      // Same path? not actually navigating.
+      const currentPath = window.location.pathname + window.location.search;
+      if (href === currentPath) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      askThen(() => router.push(href));
+    };
+
+    const onSubmit = (e: SubmitEvent) => {
+      if (!dirtyRef.current) return;
+      const form = e.target as HTMLFormElement | null;
+      if (!form) return;
+      const action = form.getAttribute("action");
+      if (!action) return; // server actions have a function action — skip.
+      if (action !== "/api/auth/logout") return;
+      e.preventDefault();
+      e.stopPropagation();
+      askThen(() => form.submit());
+    };
+
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("submit", onSubmit, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("submit", onSubmit, true);
+    };
+  }, [rulesDirty, router]);
 
   return (
     <main className="page">
@@ -86,17 +215,40 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
               type="button"
             >
               {s.label}
+              {s.id === "rules" && rulesDirty && (
+                <span className="settings-nav-dot" aria-label="modifications non enregistrées" />
+              )}
             </button>
           ))}
         </nav>
 
         <div className="settings-content">
           {active === "connections" && <ConnectionsSection user={user} watchActive={watchActive} watchExpiryISO={watchExpiryISO} />}
-          {active === "rules" && <RulesSection rules={rules} priority={priority} bufferMinutes={bufferMinutes} />}
+          {active === "rules" && (
+            <RulesSection
+              draftRules={draftRules}
+              setDraftRules={setDraftRules}
+              dirty={rulesDirty}
+              saving={rulesSaving}
+              onSave={() => saveRules()}
+              onDiscard={discardRules}
+              priority={priority}
+              bufferMinutes={bufferMinutes}
+            />
+          )}
           {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} skeddaTitleMode={skeddaTitleMode} notifPrefs={notifPrefs} channelAvailability={channelAvailability} />}
           {active === "account" && <AccountSection user={user} />}
         </div>
       </div>
+
+      {pendingExit && (
+        <ExitConfirmModal
+          saving={rulesSaving}
+          onDiscard={pendingExit.discard}
+          onSaveAndExit={pendingExit.saveThen}
+          onCancel={() => setPendingExit(null)}
+        />
+      )}
 
       <div className="toast-wrap" data-open={!!toast}>
         <div className="toast">
@@ -107,6 +259,68 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
         </div>
       </div>
     </main>
+  );
+}
+
+/**
+ * Hard-exit confirmation dialog. Only shown when the user tries to
+ * navigate away (Link click, logout submit) with unsaved rule changes.
+ * Tab close / refresh fall back to the native beforeunload prompt
+ * because that's the only thing the browser lets us hook there.
+ */
+function ExitConfirmModal({
+  saving,
+  onDiscard,
+  onSaveAndExit,
+  onCancel,
+}: {
+  saving: boolean;
+  onDiscard: () => void;
+  onSaveAndExit: () => void;
+  onCancel: () => void;
+}) {
+  // Focus the primary action on mount + handle Esc to cancel.
+  const primaryRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    primaryRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">Quitter sans enregistrer&nbsp;?</h3>
+        <p className="modal-body">
+          Vos modifications aux règles seront perdues.
+        </p>
+        <div className="modal-actions">
+          <button className="btn" type="button" onClick={onCancel} disabled={saving}>
+            Annuler
+          </button>
+          <button
+            className="btn btn-ghost-danger"
+            type="button"
+            onClick={onDiscard}
+            disabled={saving}
+          >
+            Quitter sans enregistrer
+          </button>
+          <button
+            ref={primaryRef}
+            className="btn btn-primary"
+            type="button"
+            onClick={onSaveAndExit}
+            disabled={saving}
+          >
+            {saving ? "Enregistrement…" : "Enregistrer et quitter"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -229,11 +443,21 @@ function ConnectionsSection({
 }
 
 function RulesSection({
-  rules,
+  draftRules,
+  setDraftRules,
+  dirty,
+  saving,
+  onSave,
+  onDiscard,
   priority,
   bufferMinutes,
 }: {
-  rules: BookingRules;
+  draftRules: BookingRules;
+  setDraftRules: (next: BookingRules) => void;
+  dirty: boolean;
+  saving: boolean;
+  onSave: () => void;
+  onDiscard: () => void;
   priority: RoomName[];
   bufferMinutes: number;
 }) {
@@ -268,6 +492,33 @@ function RulesSection({
     });
   };
 
+  // ⌘+S / Ctrl+S submits the rules. Only listens while the Rules section is
+  // mounted, so it doesn't fight other shortcuts on the rest of the app.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+        if (!dirty || saving) return;
+        e.preventDefault();
+        onSave();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dirty, saving, onSave]);
+
+  // Convert raw text input ("foo, bar, baz") into the normalised array the
+  // server expects. Same shape as the old parseListField helper.
+  const parseList = (raw: string, lowercase: boolean): string[] =>
+    raw
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .map((s) => (lowercase ? s.toLowerCase() : s));
+
+  const setRule = <K extends keyof BookingRules>(key: K, next: BookingRules[K]) => {
+    setDraftRules({ ...draftRules, [key]: next });
+  };
+
   return (
     <section>
       <h2 className="settings-h">Règles de réservation auto</h2>
@@ -276,44 +527,93 @@ function RulesSection({
         Plus tu en actives, plus c'est restrictif (ex&nbsp;: invité externe <em>ET</em> mot-clé «&nbsp;demo&nbsp;» → seuls les demos avec un externe sont bookés).
       </p>
 
-      <form action={saveRulesAction}>
-        <div className="rule-list" style={{ gap: 12 }}>
-          <RuleCard
-            id="externalAttendee"
-            title="Au moins un invité externe"
-            help="Déclenche si un invité a un email hors @muchbetter.ai. Recommandé."
-            enabled={rules.externalAttendee.enabled}
-          />
-          <RuleCard
-            id="titleKeywords"
-            title="Mot-clé dans le titre"
-            help="Le titre du meeting contient un de ces mots (insensible à la casse)."
-            enabled={rules.titleKeywords.enabled}
-            list={rules.titleKeywords.keywords}
-            placeholder="demo, kickoff, 1:1…"
-          />
-          <RuleCard
-            id="invitedEmails"
-            title="Email invité spécifique"
-            help="Un de ces emails est dans la liste des invités."
-            enabled={rules.invitedEmails.enabled}
-            list={rules.invitedEmails.emails}
-            placeholder="prospect@bigco.com, alice@example.com"
-          />
-          <RuleCard
-            id="descriptionKeywords"
-            title="Mot-clé dans la description"
-            help="La description du meeting contient un de ces mots. Pratique pour forcer un booking."
-            enabled={rules.descriptionKeywords.enabled}
-            list={rules.descriptionKeywords.keywords}
-            placeholder="ROOM_BOOK, room"
-          />
-        </div>
+      <div className="rule-list" style={{ gap: 12 }}>
+        <RuleCard
+          title="Au moins un invité externe"
+          help="Déclenche si un invité a un email hors @muchbetter.ai. Recommandé."
+          enabled={draftRules.externalAttendee.enabled}
+          onToggle={(on) => setRule("externalAttendee", { enabled: on })}
+        />
+        <RuleCard
+          title="Mot-clé dans le titre"
+          help="Le titre du meeting contient un de ces mots (insensible à la casse)."
+          enabled={draftRules.titleKeywords.enabled}
+          list={draftRules.titleKeywords.keywords}
+          placeholder="demo, kickoff, 1:1…"
+          onToggle={(on) =>
+            setRule("titleKeywords", { enabled: on, keywords: draftRules.titleKeywords.keywords })
+          }
+          onListChange={(raw) =>
+            setRule("titleKeywords", {
+              enabled: draftRules.titleKeywords.enabled,
+              keywords: parseList(raw, false),
+            })
+          }
+        />
+        <RuleCard
+          title="Email invité spécifique"
+          help="Un de ces emails est dans la liste des invités."
+          enabled={draftRules.invitedEmails.enabled}
+          list={draftRules.invitedEmails.emails}
+          placeholder="prospect@bigco.com, alice@example.com"
+          onToggle={(on) =>
+            setRule("invitedEmails", { enabled: on, emails: draftRules.invitedEmails.emails })
+          }
+          onListChange={(raw) =>
+            setRule("invitedEmails", {
+              enabled: draftRules.invitedEmails.enabled,
+              emails: parseList(raw, true),
+            })
+          }
+        />
+        <RuleCard
+          title="Mot-clé dans la description"
+          help="La description du meeting contient un de ces mots. Pratique pour forcer un booking."
+          enabled={draftRules.descriptionKeywords.enabled}
+          list={draftRules.descriptionKeywords.keywords}
+          placeholder="ROOM_BOOK, room"
+          onToggle={(on) =>
+            setRule("descriptionKeywords", {
+              enabled: on,
+              keywords: draftRules.descriptionKeywords.keywords,
+            })
+          }
+          onListChange={(raw) =>
+            setRule("descriptionKeywords", {
+              enabled: draftRules.descriptionKeywords.enabled,
+              keywords: parseList(raw, false),
+            })
+          }
+        />
+      </div>
 
-        <button className="btn btn-primary" type="submit" style={{ marginBottom: 8 }}>
-          <Icon.check size={14} /> Enregistrer les règles
-        </button>
-      </form>
+      {/* Sticky unsaved-changes bar (Vercel-style). Renders only when there
+       *  are unsaved edits; primary action on the right, ghost cancel left. */}
+      {dirty && (
+        <div className="unsaved-bar" role="status" aria-live="polite">
+          <span className="unsaved-bar-label">
+            <Icon.alert size={12} /> Modifications non enregistrées
+          </span>
+          <span className="unsaved-bar-spacer" />
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={onDiscard}
+            disabled={saving}
+          >
+            Annuler
+          </button>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            title="⌘+S"
+          >
+            <Icon.check size={14} /> {saving ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </div>
+      )}
 
       <div className="settings-divider" />
 
@@ -372,25 +672,26 @@ function RulesSection({
 }
 
 function RuleCard({
-  id,
   title,
   help,
   enabled,
   list,
   placeholder,
+  onToggle,
+  onListChange,
 }: {
-  id: string;
   title: string;
   help: string;
   enabled: boolean;
   list?: string[];
   placeholder?: string;
+  onToggle: (next: boolean) => void;
+  onListChange?: (raw: string) => void;
 }) {
-  const [on, setOn] = useState(enabled);
   return (
     <div
       className="rule-row"
-      data-active={on}
+      data-active={enabled}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -399,14 +700,13 @@ function RuleCard({
         padding: "14px 16px",
       }}
     >
-      <input type="hidden" name={`${id}_enabled`} value={on ? "on" : ""} />
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
         <button
           className="rule-toggle"
-          data-active={on}
-          onClick={() => setOn((v) => !v)}
-          aria-pressed={on}
-          aria-label={on ? "Désactiver" : "Activer"}
+          data-active={enabled}
+          onClick={() => onToggle(!enabled)}
+          aria-pressed={enabled}
+          aria-label={enabled ? "Désactiver" : "Activer"}
           type="button"
         >
           <span className="rule-toggle-dot" />
@@ -416,11 +716,11 @@ function RuleCard({
           <div className="toggle-row-desc">{help}</div>
         </div>
       </div>
-      {list !== undefined && on && (
+      {list !== undefined && enabled && (
         <input
           className="input"
-          name={`${id}_list`}
-          defaultValue={list.join(", ")}
+          value={list.join(", ")}
+          onChange={(e) => onListChange?.(e.target.value)}
           placeholder={placeholder}
           style={{ marginLeft: 48, width: "calc(100% - 48px)" }}
         />
