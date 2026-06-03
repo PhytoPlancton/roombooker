@@ -272,7 +272,8 @@ function RulesSection({
     <section>
       <h2 className="settings-h">Règles de réservation auto</h2>
       <p className="settings-sub">
-        Quand au moins une règle activée matche ton meeting Google, on te réserve une salle automatiquement.
+        On te réserve une salle quand <strong>toutes</strong> les règles activées matchent ton meeting Google.
+        Plus tu en actives, plus c'est restrictif (ex&nbsp;: invité externe <em>ET</em> mot-clé «&nbsp;demo&nbsp;» → seuls les demos avec un externe sont bookés).
       </p>
 
       <form action={saveRulesAction}>

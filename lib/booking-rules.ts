@@ -28,8 +28,11 @@ export interface ShouldBookContext {
  *  - location is empty (sales hasn't filled it manually)
  *  - organizer.email == user.email (the user is the host of the meeting)
  *
- * Then at least one of the user's enabled rules must match (OR logic).
- * If no rules are enabled, nothing books — that's an explicit opt-out.
+ * Then ALL of the user's active rules must match (AND logic). A rule is
+ * "active" when it's both enabled AND has the data it needs to be
+ * meaningful (e.g. titleKeywords with at least one keyword). Enabling
+ * more rules → more restrictive booking. If no rules are active, nothing
+ * books — that's an explicit opt-out.
  */
 export function shouldBookRoom(
   event: calendar_v3.Schema$Event,
@@ -55,8 +58,13 @@ export function shouldBookRoom(
   const attendees = event.attendees ?? [];
   const title = (event.summary || "").toLowerCase();
   const description = (event.description || "").toLowerCase();
+  // Count rules that actually gate something. A "titleKeywords" toggle with
+  // an empty keyword list isn't a filter — we skip it for both the active
+  // count and the match check, so it doesn't silently block all bookings.
+  let activeRules = 0;
 
   if (rules.externalAttendee.enabled) {
+    activeRules++;
     const hasExternal = attendees.some((a) => {
       const email = a.email?.toLowerCase();
       if (!email) return false;
@@ -67,6 +75,7 @@ export function shouldBookRoom(
   }
 
   if (rules.titleKeywords.enabled && rules.titleKeywords.keywords.length > 0) {
+    activeRules++;
     const hit = rules.titleKeywords.keywords.some((kw) =>
       title.includes(kw.toLowerCase().trim()),
     );
@@ -74,19 +83,25 @@ export function shouldBookRoom(
   }
 
   if (rules.invitedEmails.enabled && rules.invitedEmails.emails.length > 0) {
+    activeRules++;
     const targetSet = new Set(rules.invitedEmails.emails.map((e) => e.toLowerCase().trim()));
     const hit = attendees.some((a) => a.email && targetSet.has(a.email.toLowerCase()));
     if (hit) matched.push("invitedEmails");
   }
 
   if (rules.descriptionKeywords.enabled && rules.descriptionKeywords.keywords.length > 0) {
+    activeRules++;
     const hit = rules.descriptionKeywords.keywords.some((kw) =>
       description.includes(kw.toLowerCase().trim()),
     );
     if (hit) matched.push("descriptionKeywords");
   }
 
-  if (matched.length === 0) {
+  if (activeRules === 0) {
+    return { shouldBook: false, reason: "no_rule_matched" };
+  }
+  // AND: every active rule must contribute a match.
+  if (matched.length < activeRules) {
     return { shouldBook: false, reason: "no_rule_matched" };
   }
   return { shouldBook: true, reason: "matches_rules", matchedRules: matched };

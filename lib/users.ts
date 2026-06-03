@@ -51,8 +51,10 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
 };
 
 /**
- * Trigger rules — each one is independent. The booking is triggered
- * if AT LEAST ONE enabled rule matches the meeting (OR logic).
+ * Trigger rules — combined with AND logic. The booking only fires when
+ * EVERY enabled-and-configured rule matches the meeting. Enabling more
+ * rules narrows the funnel (e.g. external attendee + "demo" keyword →
+ * only demo meetings with an external attendee are booked).
  * Hardcoded prerequisites (organizer, not recurring, not cancelled,
  * location empty) still apply on top.
  */
