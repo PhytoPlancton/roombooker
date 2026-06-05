@@ -92,6 +92,14 @@ export async function GET(req: NextRequest) {
       event: isNewSignup ? "user_signed_up" : "user_signed_in",
       properties: { email: user.email },
     });
+    // Audit too — we use this on the Pilotage page to compute "last login"
+    // per user. PostHog is the primary analytics store but the admin
+    // dashboard reads from Mongo for snappy refreshes.
+    await audit({
+      action: "user_signed_in",
+      userId: user._id,
+      details: { email: user.email, isNewSignup },
+    });
 
     // Auto-activate the Google Calendar watch right after signin. The
     // historical UX where the user had to manually click "Activer la

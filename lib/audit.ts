@@ -22,6 +22,7 @@ export type AuditAction =
   | "notify_sent"
   | "watch_activated"
   | "watch_deactivated"
+  | "user_signed_in"
   | "user_deleted"
   | "error";
 

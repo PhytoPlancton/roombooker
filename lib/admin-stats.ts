@@ -4,10 +4,23 @@ export interface UserStat {
   userId: string;
   name: string;
   email: string;
+  /** Bookings actually confirmed on Skedda (status="booked"). */
   bookings: number;
+  /** ALL bookings ever attempted for this user — including failed, cancelled,
+   *  pending. Gives a sense of "potential reservations" vs. confirmed. */
+  bookingsAttempted: number;
+  /** SMS notifications successfully delivered for this user. */
+  smsCount: number;
   minutesSaved: number;
   watchActive: boolean;
+  /** Last time we confirmed a booking on Skedda (status="booked"). */
   lastBookingAt: Date | null;
+  /** Last time this user opened the web app (OAuth signin). */
+  lastSigninAt: Date | null;
+  /** Last time ANYTHING happened for this user — meeting evaluated, watch
+   *  renewed, manual cancel, etc. Captures both web sessions and the
+   *  webhook-driven background activity that doesn't require a login. */
+  lastActivityAt: Date | null;
 }
 
 export type ActivityKind = "booking" | "error" | "notify" | "watch";
@@ -122,15 +135,63 @@ export async function getAdminStats(): Promise<AdminStats> {
   // Per-user "last booking" lookup. Uses `updatedAt` (= the moment Skedda
   // confirmed the reservation), not `createdAt` (= the moment the meeting
   // was first received from the webhook, often days earlier).
-  const lastBookingByUser = await bookingsCol.aggregate([
-    { $match: { status: "booked" } },
-    { $sort: { updatedAt: -1 } },
-    { $group: { _id: "$userId", last: { $first: "$updatedAt" } } },
-  ]).toArray() as Array<{ _id: unknown; last: Date }>;
+  const [
+    lastBookingByUser,
+    attemptedByUser,
+    smsByUser,
+    lastSigninByUser,
+    lastActivityByUser,
+  ] = await Promise.all([
+    bookingsCol.aggregate([
+      { $match: { status: "booked" } },
+      { $sort: { updatedAt: -1 } },
+      { $group: { _id: "$userId", last: { $first: "$updatedAt" } } },
+    ]).toArray() as unknown as Promise<Array<{ _id: unknown; last: Date }>>,
+    // Total bookings ever attempted (any status). Lets the dashboard show
+    // "X / Y" where X=confirmed and Y=attempted — surfaces hidden failures.
+    bookingsCol.aggregate([
+      { $group: { _id: "$userId", count: { $sum: 1 } } },
+    ]).toArray() as unknown as Promise<Array<{ _id: unknown; count: number }>>,
+    // SMS delivered per user. We filter on successful sends only so the
+    // count matches "what actually reached the user's phone".
+    auditCol.aggregate([
+      {
+        $match: {
+          action: "notify_sent",
+          "details.channel": "sms",
+          "details.success": true,
+        },
+      },
+      { $group: { _id: "$userId", count: { $sum: 1 } } },
+    ]).toArray() as unknown as Promise<Array<{ _id: unknown; count: number }>>,
+    // Last login per user from the audit log (we started writing
+    // user_signed_in to audit in v0.11.3 — earlier users will show null
+    // until they sign in again).
+    auditCol.aggregate([
+      { $match: { action: "user_signed_in" } },
+      { $sort: { ts: -1 } },
+      { $group: { _id: "$userId", last: { $first: "$ts" } } },
+    ]).toArray() as unknown as Promise<Array<{ _id: unknown; last: Date }>>,
+    // Last "anything happened" — most recent audit entry per user. Catches
+    // background flow too (auto-booking via webhook, watch renewals, etc.)
+    // which wouldn't show up as a login.
+    auditCol.aggregate([
+      { $match: { userId: { $ne: null } } },
+      { $sort: { ts: -1 } },
+      { $group: { _id: "$userId", last: { $first: "$ts" } } },
+    ]).toArray() as unknown as Promise<Array<{ _id: unknown; last: Date }>>,
+  ]);
+
   const lastByUser = new Map<string, Date>();
-  for (const r of lastBookingByUser) {
-    lastByUser.set(String(r._id), new Date(r.last));
-  }
+  for (const r of lastBookingByUser) lastByUser.set(String(r._id), new Date(r.last));
+  const attemptedMap = new Map<string, number>();
+  for (const r of attemptedByUser) attemptedMap.set(String(r._id), r.count);
+  const smsMap = new Map<string, number>();
+  for (const r of smsByUser) smsMap.set(String(r._id), r.count);
+  const lastSigninMap = new Map<string, Date>();
+  for (const r of lastSigninByUser) lastSigninMap.set(String(r._id), new Date(r.last));
+  const lastActivityMap = new Map<string, Date>();
+  for (const r of lastActivityByUser) lastActivityMap.set(String(r._id), new Date(r.last));
 
   const now = new Date();
   const userById = new Map<string, { name: string; email: string; firstName: string }>();
@@ -151,9 +212,13 @@ export async function getAdminStats(): Promise<AdminStats> {
       name,
       email: u.email,
       bookings: count,
+      bookingsAttempted: attemptedMap.get(id) ?? 0,
+      smsCount: smsMap.get(id) ?? 0,
       minutesSaved: count * MINUTES_SAVED_PER_BOOKING,
       watchActive,
       lastBookingAt: lastByUser.get(id) ?? null,
+      lastSigninAt: lastSigninMap.get(id) ?? null,
+      lastActivityAt: lastActivityMap.get(id) ?? null,
     };
   });
   users.sort((a, b) => b.bookings - a.bookings);
@@ -186,7 +251,16 @@ export async function getAdminStats(): Promise<AdminStats> {
   type ErrorRow = {
     ts: Date;
     userId: unknown | null;
-    details: { where?: string; message?: string; reason?: string };
+    details: {
+      where?: string;
+      message?: string;
+      reason?: string;
+      // Notification-error shape — when a SMS / WhatsApp / Email send fails,
+      // the audit stores channel + type + the gateway's error string.
+      channel?: string;
+      type?: string;
+      error?: string;
+    };
   };
 
   const activity: ActivityItem[] = [];
@@ -212,13 +286,27 @@ export async function getAdminStats(): Promise<AdminStats> {
   for (const e of recentErrors as unknown as ErrorRow[]) {
     const u = e.userId ? userById.get(String(e.userId)) : null;
     const who = u?.firstName || "système";
-    const where = e.details?.where || e.details?.reason || "erreur";
-    activity.push({
-      ts: new Date(e.ts),
-      kind: "error",
-      who,
-      text: `${who} · ${where}`,
-    });
+    const d = e.details || {};
+    // Render a human-readable error line. Three shapes occur in practice:
+    //  1. Notification failure: { channel, type, error } — show channel +
+    //     a short reason so the admin can tell "WhatsApp gateway down" from
+    //     "user has no phone" at a glance.
+    //  2. Engine / OAuth failure: { where, message } — show the location
+    //     ("applyRoomToCalendarEvent", "oauth_callback") + a short message.
+    //  3. Generic: { reason } — last-resort fallback.
+    let text: string;
+    if (d.channel && d.type) {
+      const short = (d.error || "").replace(/^gateway:\s*/i, "").slice(0, 80);
+      text = `${who} · ${d.channel} a échoué (${d.type})${short ? " — " + short : ""}`;
+    } else if (d.where) {
+      const short = (d.message || "").slice(0, 80);
+      text = `${who} · ${d.where}${short ? " — " + short : ""}`;
+    } else if (d.reason) {
+      text = `${who} · ${d.reason}`;
+    } else {
+      text = `${who} · erreur (sans détail)`;
+    }
+    activity.push({ ts: new Date(e.ts), kind: "error", who, text });
   }
   activity.sort((a, b) => b.ts.getTime() - a.ts.getTime());
   const recentActivity = activity.slice(0, 10);

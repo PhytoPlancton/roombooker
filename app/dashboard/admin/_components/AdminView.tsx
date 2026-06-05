@@ -252,17 +252,21 @@ export function AdminView({
               <thead>
                 <tr>
                   <th>Commercial</th>
-                  <th>Résa</th>
-                  <th>Temps</th>
-                  <th>Dernière</th>
+                  <th title="Bookings confirmés sur Skedda / bookings tentés au total">Skedda</th>
+                  <th title="SMS de notification effectivement délivrés">SMS</th>
+                  <th title="Dernière fois que ce user a ouvert l'app">Dern. login</th>
+                  <th title="Dernière fois que Roombooker a fait quelque chose pour ce user (booking, watch, notif…). Inclut le flux webhook en background.">Dern. activité</th>
                   <th>Sync</th>
                   <th style={{ width: 36 }} aria-label="Supprimer" />
                 </tr>
               </thead>
               <tbody>
                 {stats.users.map((u) => {
-                  const t = formatHM(u.minutesSaved);
                   const isSelf = u.userId === currentUserId;
+                  // X / Y display: confirmed bookings over total attempts.
+                  // When all attempts succeeded (or zero of either), drop the
+                  // denominator to avoid visual noise.
+                  const showRatio = u.bookingsAttempted > u.bookings;
                   return (
                     <tr key={u.userId}>
                       <td>
@@ -271,9 +275,17 @@ export function AdminView({
                           <span>{u.name}</span>
                         </span>
                       </td>
-                      <td>{u.bookings}</td>
-                      <td>{u.minutesSaved > 0 ? `${t.value}${t.unit ? " " + t.unit : ""}` : "—"}</td>
-                      <td>{relTime(u.lastBookingAt)}</td>
+                      <td>
+                        <strong>{u.bookings}</strong>
+                        {showRatio && (
+                          <span style={{ color: "var(--ink-3)" }}>
+                            {" "}/ {u.bookingsAttempted}
+                          </span>
+                        )}
+                      </td>
+                      <td>{u.smsCount > 0 ? u.smsCount : "—"}</td>
+                      <td>{relTime(u.lastSigninAt)}</td>
+                      <td>{relTime(u.lastActivityAt)}</td>
                       <td>
                         <span className={`status-pill ${u.watchActive ? "free" : "occupied"}`}>
                           <span className="status-pill-dot" />
