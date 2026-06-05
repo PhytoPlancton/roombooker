@@ -3,6 +3,7 @@ import { startWatch, stopWatch } from "./calendar";
 import { findUserById, setWatchInfo, clearWatchInfo, type UserDoc } from "./users";
 import { audit } from "./audit";
 import { notifyUser } from "./notify";
+import { track } from "./analytics";
 
 function getWebhookConfig() {
   const publicUrl = process.env.PUBLIC_APP_URL;
@@ -58,6 +59,12 @@ export async function activateWatchForUser(
     userId,
     details: { source, expiry: watch.expiry.toISOString(), wasActive },
   });
+  await track({
+    userId,
+    // Distinguish a fresh activation from a renewal so the funnel reads right.
+    event: wasActive ? "watch_renewed" : "watch_activated",
+    properties: { source, expiry: watch.expiry.toISOString() },
+  });
 
   // Only notify the sales when the re-init was NOT triggered by them.
   //  - "manual"       → they clicked the button on the dashboard, they know
@@ -100,6 +107,11 @@ export async function deactivateWatchForUser(userId: ObjectId): Promise<void> {
     action: "watch_deactivated",
     userId,
     details: { hadActiveWatch },
+  });
+  await track({
+    userId,
+    event: "watch_deactivated",
+    properties: { hadActiveWatch },
   });
 }
 

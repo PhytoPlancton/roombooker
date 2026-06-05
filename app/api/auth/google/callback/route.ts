@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { upsertUserOnLogin } from "@/lib/users";
 import { activateWatchForUser } from "@/lib/watch";
 import { audit } from "@/lib/audit";
+import { identify, track, flushAnalytics } from "@/lib/analytics";
 
 function publicBase(req: NextRequest): string {
   // Always prefer PUBLIC_APP_URL — req.url reflects the internal container address (0.0.0.0:3000)
@@ -70,6 +71,28 @@ export async function GET(req: NextRequest) {
     session.email = user.email;
     await session.save();
 
+    // Analytics: identify person + signal signup vs signin so we can build
+    // a real signup funnel in PostHog. New-user heuristic: `telephone`
+    // unset means they haven't finished onboarding, so this is their first
+    // OAuth round-trip.
+    await identify({
+      userId: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      properties: {
+        createdAt: user.createdAt,
+        hasPhone: !!user.telephone,
+        hasWatch: !!user.watchChannelId,
+      },
+    });
+    const isNewSignup = !user.telephone;
+    await track({
+      userId: user._id,
+      event: isNewSignup ? "user_signed_up" : "user_signed_in",
+      properties: { email: user.email },
+    });
+
     // Auto-activate the Google Calendar watch right after signin. The
     // historical UX where the user had to manually click "Activer la
     // surveillance" on the dashboard was a footgun — every new signup
@@ -100,6 +123,7 @@ export async function GET(req: NextRequest) {
     }
 
     const dest = user.telephone ? "/dashboard" : "/onboarding";
+    await flushAnalytics();
     return NextResponse.redirect(`${base}${dest}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown_error";

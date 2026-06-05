@@ -2,6 +2,7 @@
 
 import { requireUser } from "@/lib/session";
 import { setBookingRules, setRoomLocationMode, setTelephone, type BookingRules } from "@/lib/users";
+import { track, flushAnalytics } from "@/lib/analytics";
 
 function normalizeTelephone(raw: string): string | null {
   const digits = raw.replace(/[\s.\-_()]/g, "");
@@ -25,6 +26,8 @@ export async function saveTelephone(formData: FormData): Promise<SaveTelephoneRe
     return { ok: false, error: "Format invalide (ex : 06 12 34 56 78)" };
   }
   await setTelephone(userId, normalized);
+  await track({ userId, event: "onboarding_phone_added", properties: { hasPhone: true } });
+  await flushAnalytics();
   return { ok: true };
 }
 
@@ -35,5 +38,17 @@ export async function saveOnboardingRules(args: {
   const { userId } = await requireUser();
   await setBookingRules(userId, args.rules);
   await setRoomLocationMode(userId, args.roomLocationMode);
+  await track({
+    userId,
+    event: "onboarding_rules_set",
+    properties: {
+      externalAttendeeEnabled: args.rules.externalAttendee.enabled,
+      titleKeywordsEnabled: args.rules.titleKeywords.enabled,
+      invitedEmailsEnabled: args.rules.invitedEmails.enabled,
+      descriptionKeywordsEnabled: args.rules.descriptionKeywords.enabled,
+      roomLocationMode: args.roomLocationMode,
+    },
+  });
+  await flushAnalytics();
   return { ok: true };
 }

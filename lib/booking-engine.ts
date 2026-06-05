@@ -7,6 +7,7 @@ import { applyRoomToCalendarEvent } from "./calendar";
 import { findUserById, type UserDoc } from "./users";
 import { audit } from "./audit";
 import { signCancelToken } from "./magic-link";
+import { track, flushAnalytics } from "./analytics";
 
 const MAX_DAYS_AHEAD = 10;
 
@@ -35,6 +36,20 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     userId: args.userId,
     iCalUID: args.iCalUID,
     details: { startsAt: args.meeting.startsAt.toISOString() },
+  });
+  await track({
+    userId: args.userId,
+    event: "booking_engine_started",
+    properties: {
+      iCalUID: args.iCalUID,
+      title: args.meeting.title,
+      startsAt: args.meeting.startsAt.toISOString(),
+      durationMinutes:
+        (args.meeting.endsAt.getTime() - args.meeting.startsAt.getTime()) / 60000,
+      daysAhead: Math.round(
+        (args.meeting.startsAt.getTime() - Date.now()) / 86400_000,
+      ),
+    },
   });
 
   const user = await findUserById(args.userId);
@@ -88,6 +103,12 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       iCalUID: args.iCalUID,
       details: { result: "deferred_window", daysAhead, willTryAt: willTryAt.toISOString() },
     });
+    await track({
+      userId: args.userId,
+      event: "booking_deferred",
+      properties: { iCalUID: args.iCalUID, daysAhead, willTryAt: willTryAt.toISOString() },
+    });
+    await flushAnalytics();
     return;
   }
 
@@ -115,6 +136,16 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       userId: args.userId,
       iCalUID: args.iCalUID,
       details: {
+        title: args.meeting.title,
+        matchedKeywords: matchedException.keywords,
+        rooms: matchedException.rooms,
+      },
+    });
+    await track({
+      userId: args.userId,
+      event: "room_exception_matched",
+      properties: {
+        iCalUID: args.iCalUID,
         title: args.meeting.title,
         matchedKeywords: matchedException.keywords,
         rooms: matchedException.rooms,
@@ -149,6 +180,11 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
         skeddaStartsAt: skeddaStartsAt.toISOString(),
         skeddaEndsAt: skeddaEndsAt.toISOString(),
       },
+    });
+    await track({
+      userId: args.userId,
+      event: "buffer_applied",
+      properties: { iCalUID: args.iCalUID, bufferMinutes: bufferMin },
     });
   }
 
@@ -277,6 +313,16 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
         retryWithExactTimes: true,
       },
     });
+    await track({
+      userId: args.userId,
+      event: "buffer_fallback_used",
+      properties: {
+        iCalUID: args.iCalUID,
+        reason: attempt.lastResult.reason,
+        lastRoomTried: attempt.lastRoom,
+        bufferMinutes: bufferMin,
+      },
+    });
     attempt = await tryAllRoomsForSlot(args.meeting.startsAt, args.meeting.endsAt);
   }
 
@@ -288,6 +334,20 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
       iCalUID: args.iCalUID,
       details: { result: "booked", room: attempt.room },
     });
+    await track({
+      userId: args.userId,
+      event: "booking_succeeded",
+      properties: {
+        iCalUID: args.iCalUID,
+        room: attempt.room,
+        title: args.meeting.title,
+        durationMinutes:
+          (args.meeting.endsAt.getTime() - args.meeting.startsAt.getTime()) / 60000,
+        bufferMinutes: bufferMin,
+        usedException: !!matchedException,
+      },
+    });
+    await flushAnalytics();
     return;
   }
 
@@ -309,6 +369,18 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     iCalUID: args.iCalUID,
     details: { result: "failed", reason, lastRoom },
   });
+  await track({
+    userId: args.userId,
+    event: "booking_failed",
+    properties: {
+      iCalUID: args.iCalUID,
+      reason,
+      lastRoom,
+      title: args.meeting.title,
+      bufferMinutes: bufferMin,
+    },
+  });
+  await flushAnalytics();
 }
 
 /**

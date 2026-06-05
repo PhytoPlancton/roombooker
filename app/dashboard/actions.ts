@@ -12,6 +12,7 @@ import { findUserById, deleteUserDoc, setRoomExceptions, type UserDoc } from "@/
 import { sendSms, sendEmail, sendWhatsapp } from "@/lib/notify";
 import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
+import { track, flushAnalytics } from "@/lib/analytics";
 import {
   setBookingRules,
   setBufferMinutes,
@@ -142,6 +143,15 @@ export async function saveRoomExceptionsAction(
     }))
     .filter((ex) => ex.keywords.length > 0 && ex.rooms.length > 0);
   await setRoomExceptions(userId, cleaned);
+  await track({
+    userId,
+    event: "room_exception_changed",
+    properties: {
+      exceptionsCount: cleaned.length,
+      totalKeywords: cleaned.reduce((acc, ex) => acc + ex.keywords.length, 0),
+      totalRoomSlots: cleaned.reduce((acc, ex) => acc + ex.rooms.length, 0),
+    },
+  });
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }
@@ -202,6 +212,12 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   const result = await releaseBookingByIdAsUser(bookingId, userId);
   revalidatePath("/dashboard");
   if (result.ok) {
+    await track({
+      userId,
+      event: "booking_cancelled_by_user",
+      properties: { bookingId: bookingId.toString() },
+    });
+    await flushAnalytics();
     redirect("/dashboard?success=cancelled");
   }
   if (result.reason === "locked_in") {
@@ -227,6 +243,19 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
 export async function saveRulesAction(rules: BookingRules): Promise<{ ok: boolean }> {
   const { userId } = await requireUser();
   await setBookingRules(userId, rules);
+  await track({
+    userId,
+    event: "rule_updated",
+    properties: {
+      externalAttendeeEnabled: rules.externalAttendee.enabled,
+      titleKeywordsEnabled: rules.titleKeywords.enabled,
+      titleKeywordsCount: rules.titleKeywords.keywords.length,
+      invitedEmailsEnabled: rules.invitedEmails.enabled,
+      invitedEmailsCount: rules.invitedEmails.emails.length,
+      descriptionKeywordsEnabled: rules.descriptionKeywords.enabled,
+      descriptionKeywordsCount: rules.descriptionKeywords.keywords.length,
+    },
+  });
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }
@@ -473,6 +502,16 @@ export async function forceResyncAction(
     userId,
     iCalUID: booking.iCalUID,
     details: { source: "force_resync", priorStatus: booking.status },
+  });
+
+  await track({
+    userId,
+    event: "force_resync_clicked",
+    properties: {
+      bookingId: bookingId.toString(),
+      priorStatus: booking.status,
+      iCalUID: booking.iCalUID,
+    },
   });
 
   // Fire-and-forget — the engine writes its own audits + flips status.
