@@ -152,6 +152,116 @@
   vertical-align: middle;
 }
 
+/* Per-keyword room exceptions — list of rows under "Exceptions par mot-clé".
+ * Each row: keyword input + → + ordered room pills + delete button. */
+.room-exceptions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.room-exceptions-empty {
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.room-exception-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  flex-wrap: wrap;
+}
+.room-exception-keywords {
+  flex: 0 0 200px;
+  min-width: 160px;
+}
+.room-exception-arrow {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.room-exception-rooms {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.room-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--line);
+}
+.room-pill-selected {
+  background: var(--brand-soft, var(--bg-soft));
+  border-color: var(--brand, var(--ink-3));
+  color: var(--ink);
+}
+.room-pill-unselected {
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.room-pill-unselected:hover {
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.room-pill-name {
+  margin: 0 2px;
+}
+.room-pill-arrow,
+.room-pill-remove {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+}
+.room-pill-arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.room-pill-arrow:hover:not(:disabled),
+.room-pill-remove:hover {
+  color: var(--ink);
+}
+.room-exception-delete {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.room-exception-delete:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.room-exception-warn {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--danger);
+  padding-top: 4px;
+}
+.room-exception-add {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
 /* Sticky "Modifications non enregistrées" bar that appears at the bottom
  * of the section when there are unsaved rule edits. Vercel/Linear pattern. */
 .unsaved-bar {

@@ -7,7 +7,7 @@ import { initials } from "@/lib/ui/format";
 import type { BookingRules, NotifPrefs } from "@/lib/users";
 import type { ChannelAvailability } from "@/lib/service-state";
 import type { RoomName } from "@/lib/bookings";
-import { activateWatchAction, deactivateWatchAction, saveBufferAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction, testChannelAction } from "../../actions";
+import { activateWatchAction, deactivateWatchAction, saveBufferAction, saveNotifPrefsAction, saveRoomLocationModeAction, saveRoomExceptionsAction, saveRulesAction, saveRoomPriorityAction, saveSkeddaTitleModeAction, testChannelAction } from "../../actions";
 import { PriorityDnD } from "./PriorityDnD";
 import { PhoneEditor } from "./PhoneEditor";
 
@@ -24,6 +24,7 @@ interface Props {
   roomLocationMode: "location" | "description" | "none";
   skeddaTitleMode: "none" | "anonymized" | "full";
   bufferMinutes: number;
+  roomExceptions: Array<{ keywords: string[]; rooms: RoomName[] }>;
   notifPrefs: NotifPrefs;
   channelAvailability: ChannelAvailability;
   watchActive: boolean;
@@ -48,7 +49,7 @@ interface PendingExit {
   saveThen: () => void;
 }
 
-export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, bufferMinutes, notifPrefs, channelAvailability, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
+export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTitleMode, bufferMinutes, roomExceptions, notifPrefs, channelAvailability, watchActive, watchExpiryISO, initialSection, flashSuccess, flashError }: Props) {
   const router = useRouter();
   const [active, setActive] = useState(initialSection);
   const [toast, setToast] = useState<string | null>(flashSuccess || flashError || null);
@@ -257,6 +258,7 @@ export function SettingsView({ user, rules, priority, roomLocationMode, skeddaTi
               onDiscard={discardRules}
               priority={priority}
               bufferMinutes={bufferMinutes}
+              roomExceptions={roomExceptions}
             />
           )}
           {active === "notifs" && <NotifsSection telephone={user.telephone} email={user.email} mode={roomLocationMode} skeddaTitleMode={skeddaTitleMode} notifPrefs={notifPrefs} channelAvailability={channelAvailability} />}
@@ -474,6 +476,7 @@ function RulesSection({
   onDiscard,
   priority,
   bufferMinutes,
+  roomExceptions,
 }: {
   draftRules: BookingRules;
   setDraftRules: (next: BookingRules) => void;
@@ -483,12 +486,27 @@ function RulesSection({
   onDiscard: () => void;
   priority: RoomName[];
   bufferMinutes: number;
+  roomExceptions: Array<{ keywords: string[]; rooms: RoomName[] }>;
 }) {
   const [order, setOrder] = useState<RoomName[]>(priority);
   const [savedHint, setSavedHint] = useState(false);
   const [bufferOn, setBufferOn] = useState(bufferMinutes >= 15);
   const [bufferSavedHint, setBufferSavedHint] = useState(false);
+  const [exceptions, setExceptions] = useState(roomExceptions);
+  const [exceptionsSavedHint, setExceptionsSavedHint] = useState(false);
   const [, startTransition] = useTransition();
+
+  // Persist exception edits with the same auto-save pattern as priority/buffer.
+  const saveExceptions = (next: Array<{ keywords: string[]; rooms: RoomName[] }>) => {
+    setExceptions(next);
+    startTransition(async () => {
+      const r = await saveRoomExceptionsAction(next);
+      if (r.ok) {
+        setExceptionsSavedHint(true);
+        setTimeout(() => setExceptionsSavedHint(false), 1500);
+      }
+    });
+  };
 
   const handleOrderChange = (next: RoomName[]) => {
     setOrder(next);
@@ -681,16 +699,182 @@ function RulesSection({
       <div className="settings-divider" />
 
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        <h3 className="settings-h-sub" style={{ margin: 0 }}>Choix de la salle</h3>
+        <h3 className="settings-h-sub" style={{ margin: 0 }}>Ordre de priorité par défaut</h3>
         {savedHint && (
           <span style={{ fontSize: 12, color: "var(--success)" }}>
             <Icon.check size={11} /> ordre enregistré
           </span>
         )}
       </div>
+      <p className="toggle-row-desc" style={{ marginTop: 4, marginBottom: 12 }}>
+        Utilisé pour toutes les réunions qui ne matchent aucune exception ci-dessous.
+      </p>
 
       <PriorityDnD initialOrder={order} onChange={handleOrderChange} />
+
+      <div className="settings-divider" />
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <h3 className="settings-h-sub" style={{ margin: 0 }}>Exceptions par mot-clé</h3>
+        {exceptionsSavedHint && (
+          <span style={{ fontSize: 12, color: "var(--success)" }}>
+            <Icon.check size={11} /> enregistré
+          </span>
+        )}
+      </div>
+      <p className="toggle-row-desc" style={{ marginTop: 4, marginBottom: 12 }}>
+        Si plusieurs exceptions matchent, on prend la première de la liste. Ces mots-clés agissent
+        uniquement sur le choix de la salle, pas sur la décision de réserver. Si aucune salle de
+        l&apos;exception n&apos;est dispo, la réservation échoue (on retombe pas sur la priorité par défaut).
+      </p>
+
+      <RoomExceptionsList exceptions={exceptions} onChange={saveExceptions} />
     </section>
+  );
+}
+
+/**
+ * Per-keyword room overrides. Each row = a chip-input for keywords + a
+ * draggable list of selected rooms. First row in the list that matches
+ * the meeting title wins (substring, case-insensitive). Auto-saves on
+ * every change.
+ */
+function RoomExceptionsList({
+  exceptions,
+  onChange,
+}: {
+  exceptions: Array<{ keywords: string[]; rooms: RoomName[] }>;
+  onChange: (next: Array<{ keywords: string[]; rooms: RoomName[] }>) => void;
+}) {
+  const ALL_ROOMS: RoomName[] = ["Venus", "Mars", "Mercury", "Earth", "Jupiter"];
+
+  const updateRow = (i: number, patch: Partial<{ keywords: string[]; rooms: RoomName[] }>) => {
+    const next = exceptions.map((ex, idx) => (idx === i ? { ...ex, ...patch } : ex));
+    onChange(next);
+  };
+
+  const deleteRow = (i: number) => {
+    onChange(exceptions.filter((_, idx) => idx !== i));
+  };
+
+  const addRow = () => {
+    onChange([...exceptions, { keywords: [], rooms: [] }]);
+  };
+
+  const toggleRoom = (rowIndex: number, room: RoomName) => {
+    const current = exceptions[rowIndex].rooms;
+    const next = current.includes(room)
+      ? current.filter((r) => r !== room)
+      : [...current, room];
+    updateRow(rowIndex, { rooms: next });
+  };
+
+  const moveRoom = (rowIndex: number, room: RoomName, direction: -1 | 1) => {
+    const current = exceptions[rowIndex].rooms;
+    const idx = current.indexOf(room);
+    if (idx === -1) return;
+    const swap = idx + direction;
+    if (swap < 0 || swap >= current.length) return;
+    const next = [...current];
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    updateRow(rowIndex, { rooms: next });
+  };
+
+  return (
+    <div className="room-exceptions">
+      {exceptions.length === 0 && (
+        <div className="room-exceptions-empty">
+          Aucune exception. Toutes les réunions suivent l&apos;ordre de priorité ci-dessus.
+        </div>
+      )}
+      {exceptions.map((ex, i) => (
+        <div className="room-exception-row" key={i}>
+          <input
+            className="input room-exception-keywords"
+            value={ex.keywords.join(", ")}
+            onChange={(e) =>
+              updateRow(i, {
+                keywords: e.target.value
+                  .split(/[,\n]/)
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0),
+              })
+            }
+            placeholder="tournage, shooting…"
+            aria-label="Mots-clés"
+          />
+          <span className="room-exception-arrow" aria-hidden>→</span>
+          <div className="room-exception-rooms">
+            {/* Selected rooms first, in their order, then unselected ones to add. */}
+            {ex.rooms.map((room, roomIdx) => (
+              <span key={`sel-${room}`} className="room-pill room-pill-selected">
+                <button
+                  type="button"
+                  className="room-pill-arrow"
+                  onClick={() => moveRoom(i, room, -1)}
+                  disabled={roomIdx === 0}
+                  aria-label={`Monter ${room}`}
+                  title="Monter"
+                >
+                  ↑
+                </button>
+                <span className="room-pill-name">{room}</span>
+                <button
+                  type="button"
+                  className="room-pill-arrow"
+                  onClick={() => moveRoom(i, room, 1)}
+                  disabled={roomIdx === ex.rooms.length - 1}
+                  aria-label={`Descendre ${room}`}
+                  title="Descendre"
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="room-pill-remove"
+                  onClick={() => toggleRoom(i, room)}
+                  aria-label={`Retirer ${room}`}
+                  title="Retirer"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {ALL_ROOMS.filter((r) => !ex.rooms.includes(r)).map((room) => (
+              <button
+                key={`add-${room}`}
+                type="button"
+                className="room-pill room-pill-unselected"
+                onClick={() => toggleRoom(i, room)}
+                aria-label={`Ajouter ${room}`}
+                title={`Ajouter ${room}`}
+              >
+                + {room}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="room-exception-delete"
+            onClick={() => deleteRow(i)}
+            aria-label="Supprimer cette exception"
+            title="Supprimer cette exception"
+          >
+            <Icon.x size={14} />
+          </button>
+          {ex.rooms.length === 0 && (
+            <div className="room-exception-warn">Choisis au moins une salle.</div>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn btn-ghost room-exception-add"
+        onClick={addRow}
+      >
+        + Ajouter une exception
+      </button>
+    </div>
   );
 }
 

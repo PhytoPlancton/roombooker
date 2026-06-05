@@ -8,7 +8,7 @@ import { activateWatchForUser, deactivateWatchForUser } from "@/lib/watch";
 import { releaseBookingByIdAsUser } from "@/lib/release-booking";
 import { listFutureBookedBookings, findBookingById } from "@/lib/bookings";
 import { setChannelAvailability, getChannelAvailability, type ChannelAvailability } from "@/lib/service-state";
-import { findUserById, deleteUserDoc } from "@/lib/users";
+import { findUserById, deleteUserDoc, setRoomExceptions, type UserDoc } from "@/lib/users";
 import { sendSms, sendEmail, sendWhatsapp } from "@/lib/notify";
 import { processBookingForEvent } from "@/lib/booking-engine";
 import { audit } from "@/lib/audit";
@@ -115,6 +115,33 @@ export async function saveBufferAction(formData: FormData): Promise<{ ok: boolea
   const raw = formData.get("enabled");
   const enabled = raw === "on" || raw === "true" || raw === "1";
   await setBufferMinutes(userId, enabled ? 15 : 0);
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+/**
+ * Per-keyword room overrides. Validates that each rule has at least one
+ * keyword and at least one room from the allowed set. Replaces the entire
+ * list atomically — the client always owns the source of truth.
+ */
+export async function saveRoomExceptionsAction(
+  exceptions: NonNullable<UserDoc["roomExceptions"]>,
+): Promise<{ ok: boolean; error?: string }> {
+  const { userId } = await requireUser();
+  // Sanitize: drop empty rules; lowercase + trim each keyword; only allow
+  // known rooms. We don't reject the whole payload on a bad entry — we
+  // silently filter so the user's other rules keep working.
+  const cleaned = exceptions
+    .map((ex) => ({
+      keywords: (ex.keywords ?? [])
+        .map((k) => (typeof k === "string" ? k.trim() : ""))
+        .filter((k) => k.length > 0),
+      rooms: (ex.rooms ?? []).filter((r): r is RoomKey =>
+        (VALID_ROOMS as readonly string[]).includes(r),
+      ),
+    }))
+    .filter((ex) => ex.keywords.length > 0 && ex.rooms.length > 0);
+  await setRoomExceptions(userId, cleaned);
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }

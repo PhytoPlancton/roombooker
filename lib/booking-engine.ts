@@ -91,10 +91,37 @@ export async function processBookingForEvent(args: ProcessBookingArgs): Promise<
     return;
   }
 
-  const priorityList = (user.roomPriority && user.roomPriority.length > 0)
+  const globalPriority = (user.roomPriority && user.roomPriority.length > 0)
     ? user.roomPriority
     : ROOM_PRIORITY;
-  const roomsToTry = priorityList.map((name) => ({
+
+  // Per-keyword room override. If the meeting title matches a keyword in
+  // one of the user's `roomExceptions` entries (first-match-wins on
+  // case-insensitive substring), we use THAT entry's room list verbatim
+  // and skip the global priority. No fallback: an exception with no
+  // available room fails the booking — surprise rooms are worse than a
+  // clean failure notification.
+  const title = (args.meeting.title || "").toLowerCase();
+  const matchedException = (user.roomExceptions ?? []).find((ex) =>
+    ex.keywords.some((kw) => {
+      const k = kw.toLowerCase().trim();
+      return k.length > 0 && title.includes(k);
+    }),
+  );
+  const effectiveRooms = matchedException ? matchedException.rooms : globalPriority;
+  if (matchedException) {
+    await audit({
+      action: "room_exception_matched",
+      userId: args.userId,
+      iCalUID: args.iCalUID,
+      details: {
+        title: args.meeting.title,
+        matchedKeywords: matchedException.keywords,
+        rooms: matchedException.rooms,
+      },
+    });
+  }
+  const roomsToTry = effectiveRooms.map((name) => ({
     name,
     spaceId: ROOM_SPACE_IDS[name],
   }));

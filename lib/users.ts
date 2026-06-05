@@ -112,6 +112,19 @@ export interface UserDoc {
    *  - 15: reserve 15 min before and 15 min after (total +30 min on Skedda)
    */
   bufferMinutes?: number;
+  /**
+   * Per-keyword room overrides. When the meeting title (case-insensitive
+   * substring) matches a keyword in one of these entries, we use that entry's
+   * room list INSTEAD OF the global `roomPriority`. First entry in array
+   * order wins if multiple match. No fallback to global priority — if every
+   * room in the matched exception is unavailable, the booking fails (caller
+   * gets a real failure notification rather than a surprise room).
+   *
+   * Example use case: Callista runs occasional video shoots ("tournage") that
+   * MUST go on Jupiter or Mars (big rooms with the right setup). Her global
+   * priority starts with Venus, which has no shoot setup.
+   */
+  roomExceptions?: Array<{ keywords: string[]; rooms: ("Venus" | "Mars" | "Mercury" | "Earth" | "Jupiter")[] }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -232,6 +245,17 @@ export async function setSkeddaTitleMode(
   await col.updateOne(
     { _id: userId },
     { $set: { skeddaTitleMode: mode, updatedAt: new Date() } },
+  );
+}
+
+export async function setRoomExceptions(
+  userId: ObjectId,
+  exceptions: NonNullable<UserDoc["roomExceptions"]>,
+): Promise<void> {
+  const col = await usersCol();
+  await col.updateOne(
+    { _id: userId },
+    { $set: { roomExceptions: exceptions, updatedAt: new Date() } },
   );
 }
 
