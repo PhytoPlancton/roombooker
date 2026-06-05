@@ -722,10 +722,11 @@ function RulesSection({
           </span>
         )}
       </div>
-      <p className="toggle-row-desc" style={{ marginTop: 4, marginBottom: 12 }}>
-        Si plusieurs exceptions matchent, on prend la première de la liste. Ces mots-clés agissent
-        uniquement sur le choix de la salle, pas sur la décision de réserver. Si aucune salle de
-        l&apos;exception n&apos;est dispo, la réservation échoue (on retombe pas sur la priorité par défaut).
+      <p className="toggle-row-desc" style={{ marginTop: 4, marginBottom: 8 }}>
+        Une exception sert juste à choisir la salle, pas à décider si on réserve. Ton meeting doit d&apos;abord passer les règles ci-dessus pour être éligible — sinon, même si un mot-clé matche ci-dessous, on ne book pas.
+      </p>
+      <p className="toggle-row-desc" style={{ marginTop: 0, marginBottom: 12 }}>
+        Pour les meetings éligibles : si le titre contient un mot-clé ci-dessous, on utilise les salles de cette exception au lieu de l&apos;ordre par défaut. Si plusieurs exceptions matchent, on prend la première de la liste. Si aucune salle de l&apos;exception n&apos;est dispo, le booking échoue (pas de fallback sur la priorité par défaut).
       </p>
 
       <RoomExceptionsList exceptions={exceptions} onChange={saveExceptions} />
