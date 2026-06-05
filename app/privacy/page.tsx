@@ -6,7 +6,7 @@ export const metadata = {
 };
 
 export default function PrivacyPage() {
-  const lastUpdated = "7 mai 2026";
+  const lastUpdated = "5 juin 2026";
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px 80px", fontFamily: "var(--font-inter), system-ui, sans-serif", lineHeight: 1.6, color: "var(--ink)" }}>
       <Link href="/" style={{ fontSize: 13, color: "var(--ink-3)", textDecoration: "none" }}>
@@ -56,8 +56,50 @@ export default function PrivacyPage() {
           <li>Le contenu des messages, pièces jointes, ou conversations Google.</li>
           <li>Vos contacts Google.</li>
           <li>Vos autres calendriers que le calendrier principal.</li>
-          <li>Aucune donnée comportementale (analytics, fingerprinting, etc.).</li>
+          <li>Vos mots de passe (l'authentification passe exclusivement par OAuth Google).</li>
+          <li>Aucun fingerprinting publicitaire ni tracking inter-sites.</li>
         </ul>
+      </Section>
+
+      <Section title="Analyse d'usage (PostHog)">
+        <p>
+          Pour améliorer le service sans naviguer à l'aveugle, nous utilisons{" "}
+          <a href="https://posthog.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)" }}>
+            PostHog
+          </a>{" "}
+          (PostHog Inc., hébergement européen — Frankfurt). Concrètement, PostHog capture :
+        </p>
+        <ul>
+          <li>
+            <strong>Les événements d'utilisation</strong> dans l'app : clics, navigations, créations de
+            règles, tentatives de réservation, succès et échecs Skedda, activations de surveillance Google
+            Calendar.
+          </li>
+          <li>
+            <strong>Les enregistrements de session</strong> (visionnage de votre navigation dans l'interface).
+            Tous les champs de saisie (numéro de téléphone, etc.) sont automatiquement masqués — leur
+            contenu est invisible, y compris pour l'administrateur de Roombooker.
+          </li>
+          <li>
+            <strong>Votre identifiant utilisateur</strong> Roombooker, votre email et votre nom — pour
+            corréler les événements à votre compte dans les analyses.
+          </li>
+        </ul>
+        <p>
+          PostHog ne reçoit jamais le contenu de vos meetings Google (titres, descriptions, invités, etc.) :
+          ces données restent strictement dans la base de Roombooker. Les analyses d'usage portent
+          uniquement sur le comportement dans l'app, pas sur les données métier.
+        </p>
+        <p>
+          <strong>Stockage</strong> : exclusivement en Union Européenne (Frankfurt), sans transfert hors UE.{" "}
+          <strong>Conservation</strong> : 7 ans pour les événements, 30 jours pour les enregistrements de
+          session, selon les paramètres par défaut de PostHog Cloud EU.
+        </p>
+        <p>
+          Vous pouvez à tout moment demander l'effacement complet de vos données PostHog en écrivant à
+          nicolas.monniot14@gmail.com (effacement sous 30 jours). Si votre navigateur envoie l'en-tête{" "}
+          <code>Do-Not-Track</code>, le tracking côté navigateur est automatiquement désactivé.
+        </p>
       </Section>
 
       <Section title="Comment nous utilisons les données">
@@ -72,7 +114,8 @@ export default function PrivacyPage() {
         </ol>
         <p>
           Nous ne partageons aucune donnée avec des tiers, sauf : (a) Skedda lui-même pour créer les réservations,
-          (b) EDJ Labs (envoi SMS) et Brevo (envoi email) en tant que sous-traitants techniques.
+          (b) EDJ Labs (envoi SMS, WhatsApp et email) en tant que sous-traitant technique, (c) PostHog (hébergement
+          européen) pour l'analyse d'usage — voir la section dédiée ci-dessous.
         </p>
       </Section>
 
